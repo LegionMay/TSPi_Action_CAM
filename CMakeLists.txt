@@ -16,13 +16,28 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR})
 
+# 收集 /ui/ 路径下的源文件
+set(UI_SOURCES
+    ${PROJECT_SOURCE_DIR}/ui/screens/ui_Screen1.c
+    ${PROJECT_SOURCE_DIR}/ui/ui.c
+    ${PROJECT_SOURCE_DIR}/ui/components/ui_comp_hook.c
+    ${PROJECT_SOURCE_DIR}/ui/ui_helpers.c
+)
+
 if (LV_USE_LINUX_DRM)
 
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(LIBDRM REQUIRED libdrm)
 
     target_include_directories(lvgl PUBLIC ${LIBDRM_INCLUDE_DIRS})
-    add_executable(lvglsim main.c mouse_cursor_icon.c)
+    # 添加 UI 源文件到可执行文件
+    add_executable(lvglsim main.c mouse_cursor_icon.c ${UI_SOURCES})
+    # 包含 /ui/ 路径下的头文件
+    target_include_directories(lvglsim PUBLIC
+        ${PROJECT_SOURCE_DIR}/ui
+        ${PROJECT_SOURCE_DIR}/ui/screens
+        ${PROJECT_SOURCE_DIR}/ui/components
+    )
     target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg ${LIBDRM_LIBRARIES} m pthread)
 
 elseif (LV_USE_SDL)
@@ -33,7 +48,14 @@ elseif (LV_USE_SDL)
 
     target_include_directories(lvgl PRIVATE ${SDL2_INCLUDE_DIRS})
     target_include_directories(lvgl PRIVATE ${SDL2_IMAGE_INCLUDE_DIRS})
-    add_executable(lvglsim main.c mouse_cursor_icon.c)
+    # 添加 UI 源文件到可执行文件
+    add_executable(lvglsim main.c mouse_cursor_icon.c ${UI_SOURCES})
+    # 包含 /ui/ 路径下的头文件
+    target_include_directories(lvglsim PUBLIC
+        ${PROJECT_SOURCE_DIR}/ui
+        ${PROJECT_SOURCE_DIR}/ui/screens
+        ${PROJECT_SOURCE_DIR}/ui/components
+    )
     target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES} m pthread)
 
 elseif (LV_USE_WAYLAND)
@@ -51,8 +73,15 @@ elseif (LV_USE_WAYLAND)
 
     target_include_directories(lvgl PRIVATE ${PROJECT_SOURCE_DIR}
                                             "${PROJECT_SOURCE_DIR}/wl_protocols")
+    # 添加 UI 源文件到可执行文件
     add_executable(lvglsim main.c ${WAYLAND_PROTOCOLS_SRC} 
-        mouse_cursor_icon.c backends/wayland.c)
+        mouse_cursor_icon.c backends/wayland.c ${UI_SOURCES})
+    # 包含 /ui/ 路径下的头文件
+    target_include_directories(lvglsim PUBLIC
+        ${PROJECT_SOURCE_DIR}/ui
+        ${PROJECT_SOURCE_DIR}/ui/screens
+        ${PROJECT_SOURCE_DIR}/ui/components
+    )
     target_compile_definitions(lvglsim PRIVATE LV_CONF_INCLUDE_SIMPLE)
     target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg m
         wayland-client wayland-cursor xkbcommon)
@@ -60,7 +89,14 @@ elseif (LV_USE_WAYLAND)
 else()
 
     # No specific build steps required for FBDEV
-    add_executable(lvglsim main.c mouse_cursor_icon.c)
+    # 添加 UI 源文件到可执行文件
+    add_executable(lvglsim main.c mouse_cursor_icon.c ${UI_SOURCES})
+    # 包含 /ui/ 路径下的头文件
+    target_include_directories(lvglsim PUBLIC
+        ${PROJECT_SOURCE_DIR}/ui
+        ${PROJECT_SOURCE_DIR}/ui/screens
+        ${PROJECT_SOURCE_DIR}/ui/components
+    )
     target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg m pthread)
 endif()
 

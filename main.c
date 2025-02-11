@@ -8,6 +8,8 @@
 #include "lvgl/demos/lv_demos.h"
 #include "lvgl/src/core/lv_global.h"
 
+#include "ui/ui.h"
+
 #if LV_USE_WAYLAND
 #include "backends/interface.h"
 #endif
@@ -192,8 +194,9 @@ int main(int argc, char **argv)
     lv_linux_disp_init();
 
     /*Create a Demo*/
-    lv_demo_widgets();
-    lv_demo_widgets_start_slideshow();
+    // lv_demo_widgets();
+    // lv_demo_widgets_start_slideshow();
+    ui_init();
 
     lv_linux_run_loop();
 
