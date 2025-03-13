@@ -63,7 +63,7 @@ lv_obj_t * ui____initial_actions0;
     return 0;
 }
 
-hould be 32bit to match SquareLine Studio's settings"
+
 #endif
 
 ///////////////////// ANIMATIONS ////////////////////
