@@ -28,7 +28,7 @@ extern lv_obj_t * ui_Roller2;
 extern lv_obj_t * ui____initial_actions0;
 
 // UI INIT
-void ui_init(void);
+void my_ui_init(void);
 
 #ifdef __cplusplus
 } /*extern "C"*/

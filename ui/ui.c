@@ -23,7 +23,7 @@ lv_obj_t * ui____initial_actions0;
 
 ///////////////////// TEST LVGL SETTINGS ////////////////////
 #if LV_COLOR_DEPTH != 32
-    #error "LV_COLOR_DEPTH sint main(int argc, char **argv)
+    #error "LV_COLOR_DEPTH "
 {
 
     configure_simulator(argc, argv);
@@ -72,7 +72,7 @@ lv_obj_t * ui____initial_actions0;
 
 ///////////////////// SCREENS ////////////////////
 
-void ui_init(void)
+void my_ui_init(void)
 {
     lv_disp_t * dispp = lv_display_get_default();
     lv_theme_t * theme = lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),

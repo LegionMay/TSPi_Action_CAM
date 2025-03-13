@@ -196,7 +196,7 @@ int main(int argc, char **argv)
     /*Create a Demo*/
     // lv_demo_widgets();
     // lv_demo_widgets_start_slideshow();
-    ui_init();
+    my_ui_init();
 
     lv_linux_run_loop();
 
