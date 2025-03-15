@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 
 #include "lvgl/lvgl.h"
 #include "lvgl/demos/lv_demos.h"
@@ -14,13 +15,20 @@
 #include "backends/interface.h"
 #endif
 
-uint16_t window_width;
-uint16_t window_height;
-bool fullscreen;
-bool maximize;
+uint16_t window_width = 800;  // 默认宽度
+uint16_t window_height = 480; // 默认高度
+bool fullscreen = true;
+bool maximize = true;
 
 static void configure_simulator(int argc, char **argv);
 static const char *getenv_default(const char *name, const char *dflt);
+
+// 添加定期刷新的定时器回调函数
+static void display_refresh_timer_cb(lv_timer_t * timer) {
+    lv_display_t * disp = timer->user_data;
+    lv_display_send_event(disp, LV_EVENT_REFRESH, NULL);
+    lv_refr_now(disp);
+}
 
 #if LV_USE_EVDEV
 static void indev_deleted_cb(lv_event_t * e)
@@ -70,6 +78,16 @@ static void lv_linux_disp_init(void)
 {
     const char *device = getenv_default("LV_LINUX_FBDEV_DEVICE", "/dev/fb0");
     lv_display_t * disp = lv_linux_fbdev_create();
+    
+    // 设置分辨率（确保横屏）
+    lv_display_set_resolution(disp, window_width, window_height);
+    
+    // 设置横屏
+    lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_90);
+    
+    // 添加定期刷新定时器，每秒刷新一次，防止画面消失
+    lv_timer_create(display_refresh_timer_cb, 1000, disp);
+    
 #if LV_USE_EVDEV
     lv_linux_init_input_pointer(disp);
 #endif
@@ -80,6 +98,13 @@ static void lv_linux_disp_init(void)
 {
     const char *device = getenv_default("LV_LINUX_DRM_CARD", "/dev/dri/card0");
     lv_display_t * disp = lv_linux_drm_create();
+    
+    // 设置分辨率（确保横屏）
+    lv_display_set_resolution(disp, window_width, window_height);
+    
+    // 添加定期刷新定时器，每秒刷新一次，防止画面消失
+    lv_timer_create(display_refresh_timer_cb, 1000, disp);
+    
 #if LV_USE_EVDEV
     lv_linux_init_input_pointer(disp);
 #endif
@@ -161,9 +186,6 @@ int main(int argc, char **argv)
     /* 初始化显示后端 */
     lv_linux_disp_init();
 
-    /* 设置全屏模式 */
-    lv_disp_t *disp = lv_disp_get_default();
-    
 
     /* 初始化UI */
     my_ui_init();
