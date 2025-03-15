@@ -2,6 +2,7 @@
 // SquareLine Studio version: SquareLine Studio 1.5.0
 // LVGL version: 9.1.0
 // Project name: TSPi_ActionCamera
+//ui.c
 
 #include "ui.h"
 #include "ui_helpers.h"

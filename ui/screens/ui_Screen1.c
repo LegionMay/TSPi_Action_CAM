@@ -2,29 +2,39 @@
 // SquareLine Studio version: SquareLine Studio 1.5.0
 // LVGL version: 9.1.0
 // Project name: TSPi_ActionCamera
+//ui_Screen1.c
 
 #include "../ui.h"
+
+static void btn_event_cb(lv_event_t *e)
+{
+    printf("按钮被点击！\n");
+}
 
 void ui_Screen1_screen_init(void)
 {
     ui_Screen1 = lv_obj_create(NULL);
-    lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE); // 禁用滚动
 
     ui_Image2 = lv_image_create(ui_Screen1);
-    lv_obj_set_width(ui_Image2, LV_SIZE_CONTENT);   /// 800
-    lv_obj_set_height(ui_Image2, LV_SIZE_CONTENT);    /// 480
-    lv_obj_set_align(ui_Image2, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_Image2, LV_OBJ_FLAG_CLICKABLE);     /// Flags
-    lv_obj_remove_flag(ui_Image2, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_width(ui_Image2, LV_SIZE_CONTENT);   // 宽度自适应
+    lv_obj_set_height(ui_Image2, LV_SIZE_CONTENT);  // 高度自适应
+    lv_obj_set_align(ui_Image2, LV_ALIGN_CENTER);   // 居中对齐
+    lv_obj_add_flag(ui_Image2, LV_OBJ_FLAG_CLICKABLE);     // 可点击
+    lv_obj_remove_flag(ui_Image2, LV_OBJ_FLAG_SCROLLABLE); // 禁用滚动
 
     ui_Roller2 = lv_roller_create(ui_Screen1);
     lv_roller_set_options(ui_Roller2, "Option 1\nOption 2\nOption 3", LV_ROLLER_MODE_NORMAL);
     lv_obj_set_height(ui_Roller2, 147);
-    lv_obj_set_width(ui_Roller2, LV_SIZE_CONTENT);   /// 1
+    lv_obj_set_width(ui_Roller2, LV_SIZE_CONTENT); // 宽度自适应
     lv_obj_set_x(ui_Roller2, 354);
     lv_obj_set_y(ui_Roller2, -6);
     lv_obj_set_align(ui_Roller2, LV_ALIGN_CENTER);
 
-
-
+    // 添加一个可见按钮
+    lv_obj_t *btn = lv_button_create(ui_Screen1);
+    lv_obj_set_size(btn, 100, 50);                    // 设置按钮大小
+    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);         // 居中对齐
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF0000), LV_PART_MAIN); // 设置背景为红色
+    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, NULL);       // 添加点击事件
 }
