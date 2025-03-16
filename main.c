@@ -66,6 +66,7 @@ static void lv_linux_init_input_pointer(lv_display_t *disp)
     }
     lv_indev_t *touch = lv_evdev_create(LV_INDEV_TYPE_POINTER, input_device);
     lv_indev_set_display(touch, disp);
+
     LV_IMAGE_DECLARE(mouse_cursor_icon);
     lv_obj_t * cursor_obj = lv_image_create(lv_display_get_screen_active(disp));
     lv_image_set_src(cursor_obj, &mouse_cursor_icon);
@@ -79,17 +80,28 @@ static void lv_linux_disp_init(void)
     const char *device = getenv_default("LV_LINUX_FBDEV_DEVICE", "/dev/fb0");
     lv_display_t * disp = lv_linux_fbdev_create();
     
-    // 设置分辨率（确保横屏）
-    lv_display_set_resolution(disp, window_width, window_height);
-    
+
     // 设置横屏
     lv_display_set_rotation(disp, LV_DISPLAY_ROTATION_90);
+    
+    // 设置分辨率（确保横屏）
+    lv_display_set_resolution(disp, window_width, window_height);
     
     // 添加定期刷新定时器，每秒刷新一次，防止画面消失
     lv_timer_create(display_refresh_timer_cb, 1000, disp);
     
 #if LV_USE_EVDEV
     lv_linux_init_input_pointer(disp);
+
+     // 添加转换函数以修复触摸坐标
+    lv_indev_t * indev = lv_indev_get_next(NULL);
+    while(indev) {
+        if(lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
+            // 设置坐标变换 - 告诉LVGL输入设备应适应显示旋转
+            lv_indev_set_display(indev, disp);
+        }
+        indev = lv_indev_get_next(indev);
+    }
 #endif
     lv_linux_fbdev_set_file(disp, device);
 }

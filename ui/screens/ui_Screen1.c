@@ -6,35 +6,53 @@
 
 #include "../ui.h"
 
-static void btn_event_cb(lv_event_t *e)
+static void record_btn_event_cb(lv_event_t *e)
 {
-    printf("按钮被点击！\n");
+    printf("start\n");
 }
 
 void ui_Screen1_screen_init(void)
 {
     ui_Screen1 = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE); // 禁用滚动
+    lv_obj_set_style_bg_color(ui_Screen1, lv_color_hex(0x000000), LV_PART_MAIN); // 黑色背景
+    
+    // 创建中央视频显示区域（800x450）
+    lv_obj_t *video_area = lv_obj_create(ui_Screen1);
+    lv_obj_set_size(video_area, 800, 450);
+    lv_obj_align(video_area, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(video_area, lv_color_hex(0x222222), LV_PART_MAIN); // 深灰色背景表示视频区
+    lv_obj_set_style_border_width(video_area, 1, LV_PART_MAIN); // 添加细边框
+    lv_obj_set_style_border_color(video_area, lv_color_hex(0x444444), LV_PART_MAIN); // 边框颜色
+    
+    // 在视频区域添加提示文本
+    lv_obj_t *hint_label = lv_label_create(video_area);
+    lv_label_set_text(hint_label, "Video (800x450)");
+    lv_obj_center(hint_label);
+    lv_obj_set_style_text_color(hint_label, lv_color_hex(0x888888), LV_PART_MAIN); // 灰色文本
+    
+    // 在页面底部中央添加"ActionCAM"文本
+    lv_obj_t *brand_label = lv_label_create(ui_Screen1);
+    lv_label_set_text(brand_label, "ActionCAM");
+    lv_obj_align(brand_label, LV_ALIGN_BOTTOM_MID, 0, -10); // 底部居中，上移10像素
+    lv_obj_set_style_text_font(brand_label, &lv_font_montserrat_24, LV_PART_MAIN); // 使用较大字体
+    lv_obj_set_style_text_color(brand_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN); // 白色文本
+    
+    // 在页面右侧中央添加录制按钮
+    lv_obj_t *record_btn = lv_button_create(ui_Screen1);
+    lv_obj_set_size(record_btn, 60, 60); // 较大的圆形按钮
+    lv_obj_align(record_btn, LV_ALIGN_RIGHT_MID, -30, 0); // 右侧居中，左移30像素
+    lv_obj_set_style_radius(record_btn, LV_RADIUS_CIRCLE, LV_PART_MAIN); // 设置为圆形
+    lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN); // 红色背景
+    
+    // 添加录制图标到按钮
+    lv_obj_t *record_icon = lv_label_create(record_btn);
+    lv_label_set_text(record_icon, LV_SYMBOL_STOP); // 使用LVGL内置的录制图标
+    lv_obj_center(record_icon); // 居中
+    lv_obj_set_style_text_color(record_icon, lv_color_hex(0xFFFFFF), LV_PART_MAIN); // 白色图标
+    
+    // 添加录制按钮点击事件回调
+    lv_obj_add_event_cb(record_btn, record_btn_event_cb, LV_EVENT_CLICKED, NULL);
+    
 
-    ui_Image2 = lv_image_create(ui_Screen1);
-    lv_obj_set_width(ui_Image2, LV_SIZE_CONTENT);   // 宽度自适应
-    lv_obj_set_height(ui_Image2, LV_SIZE_CONTENT);  // 高度自适应
-    lv_obj_set_align(ui_Image2, LV_ALIGN_CENTER);   // 居中对齐
-    lv_obj_add_flag(ui_Image2, LV_OBJ_FLAG_CLICKABLE);     // 可点击
-    lv_obj_remove_flag(ui_Image2, LV_OBJ_FLAG_SCROLLABLE); // 禁用滚动
-
-    ui_Roller2 = lv_roller_create(ui_Screen1);
-    lv_roller_set_options(ui_Roller2, "Option 1\nOption 2\nOption 3", LV_ROLLER_MODE_NORMAL);
-    lv_obj_set_height(ui_Roller2, 147);
-    lv_obj_set_width(ui_Roller2, LV_SIZE_CONTENT); // 宽度自适应
-    lv_obj_set_x(ui_Roller2, 354);
-    lv_obj_set_y(ui_Roller2, -6);
-    lv_obj_set_align(ui_Roller2, LV_ALIGN_CENTER);
-
-    // 添加一个可见按钮
-    lv_obj_t *btn = lv_button_create(ui_Screen1);
-    lv_obj_set_size(btn, 100, 50);                    // 设置按钮大小
-    lv_obj_align(btn, LV_ALIGN_CENTER, 0, 0);         // 居中对齐
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF0000), LV_PART_MAIN); // 设置背景为红色
-    lv_obj_add_event_cb(btn, btn_event_cb, LV_EVENT_CLICKED, NULL);       // 添加点击事件
 }
