@@ -11,9 +11,14 @@
 #include "lvgl/src/core/lv_global.h"
 #include "ui/ui.h"
 
+#include <gst/gst.h>
+
 #if LV_USE_WAYLAND
 #include "backends/interface.h"
 #endif
+
+extern GstElement *pipeline;
+extern GstBus *bus;
 
 uint16_t window_width = 800;  // 默认宽度
 uint16_t window_height = 480; // 默认高度
@@ -204,6 +209,15 @@ int main(int argc, char **argv)
 
     /* 运行LVGL事件循环 */
     lv_linux_run_loop();
+
+    if (pipeline) {
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+    }
+    if (bus) {
+        gst_object_unref(bus);
+    }
+    gst_deinit();
 
     return 0;
 }
