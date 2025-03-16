@@ -94,14 +94,14 @@ static void lv_linux_disp_init(void)
     lv_linux_init_input_pointer(disp);
 
      // 添加转换函数以修复触摸坐标
-    lv_indev_t * indev = lv_indev_get_next(NULL);
-    while(indev) {
-        if(lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
-            // 设置坐标变换 - 告诉LVGL输入设备应适应显示旋转
-            lv_indev_set_display(indev, disp);
-        }
-        indev = lv_indev_get_next(indev);
-    }
+    // lv_indev_t * indev = lv_indev_get_next(NULL);
+    // while(indev) {
+    //     if(lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {
+    //         // 设置坐标变换 - 告诉LVGL输入设备应适应显示旋转
+    //         lv_indev_set_display(indev, disp);
+    //     }
+    //     indev = lv_indev_get_next(indev);
+    // }
 #endif
     lv_linux_fbdev_set_file(disp, device);
 }
