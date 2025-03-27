@@ -15,6 +15,8 @@ void ui_Screen1_screen_init(void);
 lv_obj_t * ui_Screen1;
 lv_obj_t * ui_Image2;
 lv_obj_t * ui_Roller2;
+
+lv_obj_t *ui_Screen2;
 // CUSTOM VARIABLES
 
 // EVENTS
@@ -80,6 +82,7 @@ void my_ui_init(void)
                                                false, LV_FONT_DEFAULT);
     lv_disp_set_theme(dispp, theme);
     ui_Screen1_screen_init();
+    ui_Screen2_screen_init();
     ui____initial_actions0 = lv_obj_create(NULL);
     lv_disp_load_scr(ui_Screen1);
 }

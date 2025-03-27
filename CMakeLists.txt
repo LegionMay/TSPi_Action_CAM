@@ -20,6 +20,7 @@ target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR})
 # UI 源文件
 set(UI_SOURCES
     ${PROJECT_SOURCE_DIR}/ui/screens/ui_Screen1.c
+    ${PROJECT_SOURCE_DIR}/ui/screens/ui_Menu.c
     ${PROJECT_SOURCE_DIR}/ui/ui.c
     ${PROJECT_SOURCE_DIR}/ui/components/ui_comp_hook.c
     ${PROJECT_SOURCE_DIR}/ui/ui_helpers.c

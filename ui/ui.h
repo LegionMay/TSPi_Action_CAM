@@ -22,7 +22,8 @@ extern lv_obj_t * ui_Screen1;
 extern lv_obj_t * ui_Image2;
 extern lv_obj_t * ui_Roller2;
 // CUSTOM VARIABLES
-
+extern lv_obj_t *ui_Screen2;
+void ui_Screen2_screen_init(void);
 // EVENTS
 
 extern lv_obj_t * ui____initial_actions0;
