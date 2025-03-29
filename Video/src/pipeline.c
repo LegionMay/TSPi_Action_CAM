@@ -27,7 +27,8 @@ GstElement* create_pipeline(VideoConfig *config) {
     if (!config) return NULL;
 
     GstElement *pipeline, *source, *tee, *enc_queue, *enc, *parse, *mux, *filesink,
-               *app_queue, *videoscale, *videoflip, *videoconvert, *app_sink;
+               *app_queue, *videoscale, *videoflip, *videoconvert, *app_sink,
+               *audio_src, *audio_queue, *audio_enc, *audio_convert, *audio_resample;
     GstAppSinkCallbacks callbacks = { NULL, NULL, on_new_sample };
 
     // 创建元素
@@ -44,15 +45,23 @@ GstElement* create_pipeline(VideoConfig *config) {
     videoflip = gst_element_factory_make("videoflip", "videoflip");
     videoconvert = gst_element_factory_make("videoconvert", "videoconvert");
     app_sink = gst_element_factory_make("appsink", "app_sink");
+    
+    // 添加音频元素
+    audio_src = gst_element_factory_make("alsasrc", "audio-source");
+    audio_queue = gst_element_factory_make("queue", "audio_queue");
+    audio_enc = gst_element_factory_make("vorbisenc", "audio-encoder");
+    audio_convert = gst_element_factory_make("audioconvert", "audio-convert");
+    audio_resample = gst_element_factory_make("audioresample", "audio-resample");
 
     if (!pipeline || !source || !tee || !enc_queue || !enc || !parse || !mux || !filesink ||
-        !app_queue || !videoscale || !videoflip || !videoconvert || !app_sink) {
+        !app_queue || !videoscale || !videoflip || !videoconvert || !app_sink ||
+        !audio_src || !audio_queue || !audio_enc || !audio_convert || !audio_resample) {
         g_printerr("Failed to create elements.\n");
         if (pipeline) gst_object_unref(pipeline);
         return NULL;
     }
 
-    // 设置source属性
+    // 设置视频源属性
     g_object_set(G_OBJECT(source), "device", "/dev/video0", NULL);
 
     // 生成文件名，基于创建时间
@@ -63,6 +72,10 @@ GstElement* create_pipeline(VideoConfig *config) {
              t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
     g_object_set(G_OBJECT(filesink), "location", filename, NULL);
 
+    // 音频源使用默认设备
+    // 设置音频重采样质量
+    g_object_set(G_OBJECT(audio_resample), "quality", 2, NULL);  // 高质量重采样
+
     // 设置app_sink属性
     g_object_set(G_OBJECT(app_sink), "emit-signals", TRUE, "sync", FALSE, NULL);
     gst_app_sink_set_callbacks(GST_APP_SINK(app_sink), &callbacks, NULL, NULL);
@@ -70,8 +83,8 @@ GstElement* create_pipeline(VideoConfig *config) {
     // 设置videoflip属性
     g_object_set(G_OBJECT(videoflip), "method", 1, NULL);  // 顺时针旋转90度
 
-    // 创建source_caps
-    GstCaps *source_caps = gst_caps_new_simple("video/x-raw",
+    // 创建视频源Caps
+    GstCaps *video_caps = gst_caps_new_simple("video/x-raw",
                                                "format", G_TYPE_STRING, "NV12",
                                                "width", G_TYPE_INT, config->record_width,
                                                "height", G_TYPE_INT, config->record_height,
@@ -79,27 +92,36 @@ GstElement* create_pipeline(VideoConfig *config) {
                                                NULL);
 
     // 添加元素到管道
-    gst_bin_add_many(GST_BIN(pipeline), source, tee, enc_queue, enc, parse, mux, filesink,
-                     app_queue, videoscale, videoflip, videoconvert, app_sink, NULL);
+    gst_bin_add_many(GST_BIN(pipeline), 
+        source, tee, enc_queue, enc, parse, mux, filesink,
+        app_queue, videoscale, videoflip, videoconvert, app_sink,
+        audio_src, audio_queue, audio_convert, audio_resample, audio_enc,  
+        NULL);
 
-    // 链接source和tee
-    if (!gst_element_link_filtered(source, tee, source_caps)) {
-        g_printerr("Failed to link source and tee.\n");
-        gst_caps_unref(source_caps);
+    // 链接视频分支
+    if (!gst_element_link_filtered(source, tee, video_caps)) {
+        g_printerr("Failed to link video source and tee.\n");
+        gst_caps_unref(video_caps);
         gst_object_unref(pipeline);
         return NULL;
     }
-    gst_caps_unref(source_caps);
+    gst_caps_unref(video_caps);
 
-    // 录制分支：tee -> enc_queue -> enc -> parse -> mux -> filesink
+    // 链接视频录制分支
     if (!gst_element_link_many(tee, enc_queue, enc, parse, mux, filesink, NULL)) {
-        g_printerr("Failed to link recording branch.\n");
+        g_printerr("Failed to link video recording branch.\n");
         gst_object_unref(pipeline);
         return NULL;
     }
 
-    // 预览分支：tee -> app_queue -> videoscale -> videoflip -> videoconvert -> app_sink
-    // 移除手动链接videoscale和videoflip的代码，由gst_element_link_many自动处理
+    // 链接音频分支
+    if (!gst_element_link_many(audio_src, audio_queue, audio_convert, audio_resample, audio_enc, mux, NULL)) {
+        g_printerr("Failed to link audio encoding branch.\n");
+        gst_object_unref(pipeline);
+        return NULL;
+    }
+
+    // 链接预览分支
     if (!gst_element_link_many(tee, app_queue, videoscale, videoflip, videoconvert, app_sink, NULL)) {
         g_printerr("Failed to link preview branch.\n");
         gst_object_unref(pipeline);
@@ -108,6 +130,7 @@ GstElement* create_pipeline(VideoConfig *config) {
 
     return pipeline;
 }
+
 void start_pipeline(GstElement *pipeline) {
     if (!pipeline) return;
     GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
