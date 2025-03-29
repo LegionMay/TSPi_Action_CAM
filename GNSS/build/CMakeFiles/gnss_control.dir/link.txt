@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wextra -g   CMakeFiles/gnss_control.dir/src/gnss_control.c.o  -o ../bin/gnss_control 

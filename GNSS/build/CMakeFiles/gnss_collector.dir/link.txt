@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wextra -g   CMakeFiles/gnss_collector.dir/src/main.c.o CMakeFiles/gnss_collector.dir/src/gnss_reader.c.o  -o ../bin/gnss_collector  -lpthread 

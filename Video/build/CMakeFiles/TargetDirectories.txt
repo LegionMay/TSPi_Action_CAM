@@ -1,0 +1,3 @@
+/app/Video/build/CMakeFiles/rebuild_cache.dir
+/app/Video/build/CMakeFiles/edit_cache.dir
+/app/Video/build/CMakeFiles/VideoProcess.dir

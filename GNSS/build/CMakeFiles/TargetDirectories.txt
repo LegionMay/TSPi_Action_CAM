@@ -1,0 +1,8 @@
+/app/GNSS/build/CMakeFiles/install/strip.dir
+/app/GNSS/build/CMakeFiles/install/local.dir
+/app/GNSS/build/CMakeFiles/install.dir
+/app/GNSS/build/CMakeFiles/list_install_components.dir
+/app/GNSS/build/CMakeFiles/rebuild_cache.dir
+/app/GNSS/build/CMakeFiles/edit_cache.dir
+/app/GNSS/build/CMakeFiles/gnss_control.dir
+/app/GNSS/build/CMakeFiles/gnss_collector.dir
