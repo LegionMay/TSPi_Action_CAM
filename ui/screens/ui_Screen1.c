@@ -58,12 +58,12 @@ void ui_Screen1_screen_init(void) {
     // 顶部状态栏
     lv_obj_t *status_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(status_bar);
-    lv_obj_set_size(status_bar, hor_res, 30);
-    lv_obj_set_style_pad_hor(status_bar, 10, 0);
+    lv_obj_set_size(status_bar, hor_res, 35);  // 增加高度
+    lv_obj_set_style_pad_hor(status_bar, 15, 0);
     lv_obj_set_flex_flow(status_bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(status_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // 左侧SD卡信息
+    // 左侧：SD卡剩余时间
     lv_obj_t *sd_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(sd_info);
     lv_obj_set_flex_flow(sd_info, LV_FLEX_FLOW_ROW);
@@ -72,25 +72,53 @@ void ui_Screen1_screen_init(void) {
     lv_obj_t *sd_icon = lv_label_create(sd_info);
     lv_label_set_text(sd_icon, LV_SYMBOL_SD_CARD);
     lv_obj_set_style_text_color(sd_icon, lv_color_white(), 0);
+    lv_obj_set_style_text_font(sd_icon, &lv_font_montserrat_16, 0);
     
     lv_obj_t *sd_label = lv_label_create(sd_info);
     lv_label_set_text(sd_label, "1:00:00");
     lv_obj_set_style_text_color(sd_label, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_font(sd_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_pad_left(sd_label, 5, 0);
 
-    // 右侧电池信息
+    // 中间左侧：录制模式
+    lv_obj_t *rec_mode = lv_label_create(status_bar);
+    lv_label_set_text(rec_mode, "1080P30");
+    lv_obj_set_style_text_color(rec_mode, lv_color_white(), 0);
+    lv_obj_set_style_text_font(rec_mode, &lv_font_montserrat_16, 0);
+
+    // 中间右侧：GNSS卫星信息
+    lv_obj_t *gnss_info = lv_obj_create(status_bar);
+    lv_obj_remove_style_all(gnss_info);
+    lv_obj_set_flex_flow(gnss_info, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(gnss_info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    
+    lv_obj_t *gnss_icon = lv_label_create(gnss_info);
+    lv_label_set_text(gnss_icon, LV_SYMBOL_GPS);  // 使用GPS符号代替卫星
+    lv_obj_set_style_text_color(gnss_icon, lv_color_white(), 0);
+    lv_obj_set_style_text_font(gnss_icon, &lv_font_montserrat_16, 0);
+    
+    lv_obj_t *gnss_label = lv_label_create(gnss_info);
+    lv_label_set_text(gnss_label, "0");
+    lv_obj_set_style_text_color(gnss_label, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_font(gnss_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_pad_left(gnss_label, 5, 0);
+
+    // 右侧：电池信息
     lv_obj_t *battery_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(battery_info);
     lv_obj_set_flex_flow(battery_info, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(battery_info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     lv_obj_t *bat_label = lv_label_create(battery_info);
     lv_label_set_text(bat_label, "80%");
     lv_obj_set_style_text_color(bat_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(bat_label, &lv_font_montserrat_14, 0);
     
     lv_obj_t *bat_icon = lv_label_create(battery_info);
     lv_label_set_text(bat_icon, LV_SYMBOL_BATTERY_3);
     lv_obj_set_style_text_color(bat_icon, lv_color_white(), 0);
-    lv_obj_set_style_pad_left(bat_icon, 5, 0);
+    lv_obj_set_style_text_font(bat_icon, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_pad_left(bat_icon, 8, 0);
 
     // 视频预览容器
     lv_obj_t *video_container = lv_obj_create(ui_Screen1);
