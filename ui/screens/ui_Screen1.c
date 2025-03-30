@@ -1,17 +1,48 @@
-//ui_Screen1.c
+#include <lvgl/lvgl.h>
 #include "../ui.h"
+
 #include <stdio.h>
+#include <sys/shm.h>
+#include <string.h>
+
+// 共享内存配置（与 shm_utils.h 一致）
+#define SHM_KEY 1234
+#define SHM_SIZE 800 * 450 * 4  // 800x450 RGBA
 
 // 录制按钮事件回调
 static void record_btn_event_cb(lv_event_t *e) {
     printf("Recording started\n");
-    // TODO: 从共享内存获取视频流并保存的逻辑
+    // TODO: 告知视频处理进程获取视频流并保存的逻辑
 }
 
 // 菜单按钮事件回调
 static void menu_btn_event_cb(lv_event_t *e) {
     // 切换到菜单界面
     lv_screen_load(ui_Screen2);
+}
+
+// 视频预览更新函数
+static void update_video_preview(lv_timer_t *timer) {
+    lv_obj_t *video_area = (lv_obj_t *)lv_timer_get_user_data(timer);
+    static void *shm_ptr = NULL;
+
+    // 初次附加共享内存
+    if (!shm_ptr) {
+        int shmid = shmget(SHM_KEY, SHM_SIZE, 0666);
+        if (shmid == -1) {
+            perror("shmget failed");
+            return;
+        }
+        shm_ptr = shmat(shmid, NULL, 0);
+        if (shm_ptr == (void *)-1) {
+            perror("shmat failed");
+            return;
+        }
+    }
+
+    // 将共享内存中的视频帧设置为图像源
+    lv_image_set_src(video_area, shm_ptr);
+    lv_obj_invalidate(video_area); // 强制重绘
 }
 
 void ui_Screen1_screen_init(void) {
@@ -39,12 +70,15 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_bg_color(video_container, lv_color_hex(0x222222), LV_PART_MAIN);
 
     // 创建视频预览区域（800x450）
-    lv_obj_t *video_area = lv_obj_create(video_container);
-    lv_obj_remove_style_all(video_area);
-    lv_obj_set_size(video_area, 800, 450); // 固定为 800x450
+    lv_obj_t *video_area = lv_image_create(video_container);
+    lv_obj_set_size(video_area, 800, 480); // 固定为 800x450
     lv_obj_set_pos(video_area, 0, 0);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x222222), LV_PART_MAIN);
     lv_obj_set_style_border_width(video_area, 0, LV_PART_MAIN);
+
+    // 创建定时器以更新视频预览
+    lv_timer_t *timer = lv_timer_create(update_video_preview, 33, video_area); // 约30fps
+    lv_timer_set_user_data(timer, video_area);
 
     // 底部半透明控制栏
     lv_obj_t *bottom_bar = lv_obj_create(video_container);

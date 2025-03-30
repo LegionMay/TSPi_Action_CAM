@@ -28,11 +28,6 @@ set(UI_SOURCES
 
 
 
-# 使用 pkg-config 查找 GStreamer 库
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GST REQUIRED gstreamer-1.0)
-message(STATUS "GST_INCLUDE_DIRS: ${GST_INCLUDE_DIRS}")
-pkg_check_modules(GST_APP REQUIRED gstreamer-app-1.0)
 
 # 根据不同后端配置编译
 if (LV_USE_LINUX_DRM)
@@ -47,7 +42,6 @@ if (LV_USE_LINUX_DRM)
         ${PROJECT_SOURCE_DIR}/ui/components
         ${GST_INCLUDE_DIRS}
     )
-    #target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg ${LIBDRM_LIBRARIES} ${GST_LIBRARIES} ${GST_APP_LIBRARIES} m pthread)
 
 elseif (LV_USE_SDL)
     # 查找 SDL2 和 SDL2_image（使用系统默认路径）
@@ -93,7 +87,7 @@ else()
         ${PROJECT_SOURCE_DIR}/ui/components
     )
     target_include_directories(lvglsim PUBLIC ${GST_INCLUDE_DIRS})
-    target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg ${GST_LIBRARIES} ${GST_APP_LIBRARIES} m pthread)
+    target_link_libraries(lvglsim lvgl lvgl::examples lvgl::demos lvgl::thorvg  m pthread)
 endif()
 
 # 添加运行目标
