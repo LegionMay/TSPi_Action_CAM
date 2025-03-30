@@ -1,0 +1,144 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="http://check.sourceforge.net/xml/check_unittest.xslt"?>
+<testsuites xmlns="http://check.sourceforge.net/ns">
+  <datetime>2025-03-24 21:39:42</datetime>
+  <suite>
+    <title>PublicFunc</title>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:144</fn>
+      <id>test_mg_version</id>
+      <iteration>0</iteration>
+      <duration>0.000169</duration>
+      <description>Version</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:190</fn>
+      <id>test_mg_get_valid_options</id>
+      <iteration>0</iteration>
+      <duration>0.004161</duration>
+      <description>Options</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:202</fn>
+      <id>test_mg_get_builtin_mime_type</id>
+      <iteration>0</iteration>
+      <duration>0.000036</duration>
+      <description>MIME types</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:239</fn>
+      <id>test_mg_strncasecmp</id>
+      <iteration>0</iteration>
+      <duration>0.000041</duration>
+      <description>strcasecmp</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:493</fn>
+      <id>test_mg_url_encode</id>
+      <iteration>0</iteration>
+      <duration>0.000023</duration>
+      <description>URL encoding decoding</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:531</fn>
+      <id>test_mg_url_decode</id>
+      <iteration>0</iteration>
+      <duration>0.000027</duration>
+      <description>URL encoding decoding</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:678</fn>
+      <id>test_mg_split_form_urlencoded</id>
+      <iteration>0</iteration>
+      <duration>0.000042</duration>
+      <description>URL encoding decoding</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:618</fn>
+      <id>test_mg_base64</id>
+      <iteration>0</iteration>
+      <duration>0.000037</duration>
+      <description>BASE64 encoding decoding</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:305</fn>
+      <id>test_mg_get_cookie</id>
+      <iteration>0</iteration>
+      <duration>0.000034</duration>
+      <description>Cookies and variables</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:414</fn>
+      <id>test_mg_get_var</id>
+      <iteration>0</iteration>
+      <duration>0.000087</duration>
+      <description>Cookies and variables</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:470</fn>
+      <id>test_mg_md5</id>
+      <iteration>0</iteration>
+      <duration>0.000035</duration>
+      <description>MD5</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_func.c:694</fn>
+      <id>test_mg_get_response_code_text</id>
+      <iteration>0</iteration>
+      <duration>0.002261</duration>
+      <description>Aux functions</description>
+      <message>Passed</message>
+    </test>
+  </suite>
+  <suite>
+    <title>PublicServer</title>
+    <test result="error">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_server.c:160</fn>
+      <id>test_the_test_environment</id>
+      <iteration>0</iteration>
+      <duration>-1.000000</duration>
+      <description>Check test environment</description>
+      <message>Early exit with return value 1</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_server.c:5139</fn>
+      <id>test_init_library</id>
+      <iteration>0</iteration>
+      <duration>0.002517</duration>
+      <description>Init library</description>
+      <message>Passed</message>
+    </test>
+    <test result="success">
+      <path>/home/lmay/Desktop/TSP_SDK/Release/TSPi_Action/civetweb/unittest</path>
+      <fn>public_server.c:281</fn>
+      <id>test_threading</id>
+      <iteration>0</iteration>
+      <duration>1.000211</duration>
+      <description>Start threads</description>
+      <message>Passed</message>
+    </test>

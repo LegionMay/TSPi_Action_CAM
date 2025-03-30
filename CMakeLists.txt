@@ -222,7 +222,7 @@ option(CIVETWEB_ENABLE_DUKTAPE "Enable Duktape CGIs" OFF)
 message(STATUS "Duktape CGI support - ${CIVETWEB_ENABLE_DUKTAPE}")
 
 # SSL support
-option(CIVETWEB_ENABLE_SSL "Enables the secure socket layer" ON)
+option(CIVETWEB_ENABLE_SSL "Enables the secure socket layer" OFF)
 message(STATUS "SSL support - ${CIVETWEB_ENABLE_SSL}")
 
 # OpenSSL 1.0 API
@@ -230,7 +230,7 @@ option(CIVETWEB_SSL_OPENSSL_API_1_0 "Use the OpenSSL 1.0 API" OFF)
 message(STATUS "Compile for OpenSSL 1.0 API - ${CIVETWEB_SSL_OPENSSL_API_1_0}")
 
 # OpenSSL 1.1 API
-option(CIVETWEB_SSL_OPENSSL_API_1_1 "Use the OpenSSL 1.1 API" ON)
+option(CIVETWEB_SSL_OPENSSL_API_1_1 "Use the OpenSSL 1.1 API" OFF)
 message(STATUS "Compile for OpenSSL 1.1 API - ${CIVETWEB_SSL_OPENSSL_API_1_1}")
 
 # OpenSSL 3.0 API

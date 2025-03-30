@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>TSPi Action - 泰山派运动相机</title>
+    <!-- 本地Leaflet资源 -->
+    <link rel="stylesheet" href="/leaflet/leaflet.css"/>
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --secondary-color: #607D8B;
+        }
+
+         /* 高级黑灰标题 */
+         .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 1.5rem;
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .main-title {
+            color: #e0e0e0;
+            font-size: 2.8em;
+            margin: 0;
+            font-family: 'Helvetica Neue', sans-serif;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+            display: inline-block;
+        }
+
+        .main-title::after {
+            content: '';
+            display: block;
+            width: 60%;
+            height: 2px;
+            background: #5a5a5a;
+            margin: 12px auto 0;
+            opacity: 0.8;
+        }
+
+        .author {
+            color: #909090;
+            font-size: 0.9em;
+            margin-top: 15px;
+            letter-spacing: 1px;
+            font-family: 'Courier New', monospace;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .tab-nav {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--secondary-color);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .info-card {
+            padding: 20px;
+            border-left: 4px solid var(--primary-color);
+            background: #f8f9fa;
+        }
+
+        .info-card h3 {
+            color: var(--secondary-color);
+            margin: 0 0 10px 0;
+        }
+
+        .video-manager {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .file-list {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+
+        .video-detail {
+            display: none;
+        }
+
+        #video-player {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 8px;
+        }
+
+        #map-container {
+            height: 400px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .example-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+
+        .detail-actions {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: var(--primary-color);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="main-title">TSPi Action 泰山派运动相机</h1>
+        <div class="author">Developed by GitHub@LegionMay</div>
+    </div>
+
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="showTab('device')">设备信息</button>
+        <button class="tab-btn" onclick="showTab('video')">视频管理</button>
+    </div>
+
+    <!-- 设备信息页 -->
+    <div id="deviceTab" class="device-info">
+        <div class="info-card">
+            <h3>处理器</h3>
+            <p>RK3566<br>四核ARM Cortex A55 @ 2.0GHz</p>
+        </div>
+        <div class="info-card">
+            <h3>电源信息</h3>
+            <p>1000mAh 锂离子聚合物电池</p>
+        </div>
+        <div class="info-card">
+            <h3>存储配置</h3>
+            <p>RAM：2GB LPDDR4<br>ROM：16GB eMMC</p>
+        </div>
+        <div class="info-card">
+            <h3>系统版本</h3>
+            <p>Firmware v1.0.0<br>Build 20240320</p>
+        </div>
+    </div>
+
+    <!-- 视频管理页 -->
+    <div id="videoTab" class="video-manager">
+        <div class="file-list" id="fileList"></div>
+
+        <div class="video-detail">
+            <video id="video-player" controls></video>
+            <div class="detail-actions">
+                <a id="downloadBtn" class="btn" download>下载视频</a>
+                <button class="btn" onclick="backToList()">返回列表</button>
+            </div>
+            <div id="map-container"></div>
+        </div>
+    </div>
+
+    <!-- 本地Leaflet JS -->
+    <script src="/leaflet/leaflet.js"></script>
+    <script>
+        let currentTab = 'device';
+        let mapInstance = null;
+
+        // 示例数据
+        const exampleData = {
+            video: {
+                name: "示例视频.mp4",
+                path: "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAABNttZGF0AAAAL...",
+                size: 5242880, // 5MB
+                date: "2024-03-20 14:30",
+                isExample: true
+            },
+            gnss: {
+                timestamp: "1710927000",
+                latitude: 39.9042,
+                longitude: 116.4074,
+                satellites: 8,
+                altitude: 52.3,
+                record_time: "20240320_143000"
+            }
+        };
+
+        // 选项卡切换
+        function showTab(tab) {
+            document.getElementById('deviceTab').style.display = tab === 'device' ? 'grid' : 'none';
+            document.getElementById('videoTab').style.display = tab === 'video' ? 'block' : 'none';
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            if(tab === 'video' && !window.fileListLoaded) {
+                loadVideoFiles();
+                window.fileListLoaded = true;
+            }
+        }
+
+        // 加载视频文件
+        async function loadVideoFiles() {
+            try {
+                const response = await fetch('/mnt/sdcard/');
+                const data = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(data, 'text/html');
+                
+                let files = Array.from(doc.querySelectorAll('tr'))
+                    .slice(1)
+                    .map(tr => {
+                        const tds = tr.querySelectorAll('td');
+                        return tds.length >= 3 ? {
+                            name: tds[0].querySelector('a').textContent,
+                            path: tds[0].querySelector('a').href,
+                            size: parseInt(tds[1].textContent),
+                            date: tds[2].textContent,
+                            isExample: false
+                        } : null;
+                    })
+                    .filter(file => file && /\.(mp4|mkv)$/i.test(file.name));
+
+                // 添加示例数据
+                if(files.length === 0) {
+                    files.push(exampleData.video);
+                }
+
+                renderFileList(files);
+            } catch (error) {
+                console.error('文件加载失败，显示示例数据');
+                renderFileList([exampleData.video]);
+            }
+        }
+
+        // 渲染文件列表
+        function renderFileList(files) {
+            const container = document.getElementById('fileList');
+            container.innerHTML = '';
+            
+            files.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.innerHTML = `
+                    <span>
+                        ${file.name}
+                        ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
+                    </span>
+                    <span>${formatSize(file.size)}</span>
+                    <span>${file.date}</span>
+                `;
+
+                item.addEventListener('click', () => showVideoDetail(file));
+                container.appendChild(item);
+            });
+        }
+
+        // 显示视频详情
+        async function showVideoDetail(file) {
+            document.querySelector('.file-list').style.display = 'none';
+            document.querySelector('.video-detail').style.display = 'block';
+            
+            // 初始化视频播放器
+            const player = document.getElementById('video-player');
+            if(file.isExample) {
+                player.src = exampleData.video.path;
+                player.controls = true;
+            } else {
+                player.src = file.path;
+            }
+            
+            // 加载定位数据
+            const coords = file.isExample ? 
+                exampleData.gnss : 
+                await loadGPSData(file.name.replace(/\.[^.]+$/, '') + '.json');
+            
+            initMap(coords);
+
+            // 设置下载链接
+            const downloadBtn = document.getElementById('downloadBtn');
+            if(file.isExample) {
+                downloadBtn.href = "#";
+                downloadBtn.onclick = () => alert('示例文件不支持下载');
+            } else {
+                downloadBtn.href = file.path;
+                downloadBtn.onclick = null;
+            }
+        }
+
+        // 加载GPS数据
+        async function loadGPSData(jsonFile) {
+            try {
+                const response = await fetch(jsonFile);
+                return await response.json();
+            } catch (error) {
+                console.error('定位数据加载失败，使用示例数据');
+                return exampleData.gnss;
+            }
+        }
+
+        // 初始化离线地图
+        function initMap(coords) {
+            if(mapInstance) {
+                mapInstance.remove();
+            }
+            
+            mapInstance = L.map('map-container', {
+                attributionControl: false
+            }).setView([coords.latitude, coords.longitude], 15);
+
+            // 加载本地离线瓦片
+            L.tileLayer('/offline-map/{z}/{x}/{y}.png').addTo(mapInstance);
+            
+            // 添加标记
+            L.marker([coords.latitude, coords.longitude])
+                .bindPopup(this.createPopupContent(coords))
+                .addTo(mapInstance);
+        }
+
+        // 创建地图弹窗内容
+        function createPopupContent(coords) {
+            return `
+                <b>记录时间:</b> ${formatTime(coords.record_time)}<br>
+                <b>坐标:</b> ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}<br>
+                <b>海拔:</b> ${coords.altitude}m<br>
+                <b>卫星数:</b> ${coords.satellites}
+            `;
+        }
+
+        // 返回列表
+        function backToList() {
+            document.querySelector('.file-list').style.display = 'block';
+            document.querySelector('.video-detail').style.display = 'none';
+            if(mapInstance) {
+                mapInstance.remove();
+                mapInstance = null;
+            }
+        }
+
+        // 工具函数
+        function formatSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length) {
+                bytes /= 1024;
+                i++;
+            }
+            return bytes.toFixed(2) + ' ' + units[i];
+        }
+
+        function formatTime(timeStr) {
+            return timeStr.replace(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
+        }
+
+        // 初始化显示设备信息页
+        showTab('device');
+    </script>
+</body>
+</html>
