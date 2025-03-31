@@ -189,6 +189,9 @@ CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../include/config.h
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../include/pipeline.h
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../include/shm_utils.h
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../include/utils.h
+CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../usr/include/rga/RgaApi.h
+CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../usr/include/rga/drmrga.h
+CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../usr/include/rga/rga.h
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: ../src/pipeline.c
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: /usr/include/glib-2.0/glib-object.h
 CMakeFiles/VideoProcess.dir/src/pipeline.c.o: /usr/include/glib-2.0/glib.h
