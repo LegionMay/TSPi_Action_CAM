@@ -1,12 +1,13 @@
 #include <lvgl/lvgl.h>
 #include "../ui.h"
+#include "ui/sdcard/sd_status.h"  // 添加SD卡状态模块头文件
 
 #include <stdio.h>
 #include <sys/shm.h>
 #include <string.h>
 
 #define SHM_KEY 1234
-#define SHM_SIZE 800 * 450 * 4
+#define SHM_SIZE 800 * 480 * 4  
 
 static void record_btn_event_cb(lv_event_t *e) {
     static uint8_t is_recording = 0;
@@ -44,10 +45,22 @@ static void update_video_preview(lv_timer_t *timer) {
     lv_obj_invalidate(video_area);
 }
 
+// 自定义SD卡显示回调
+static void custom_sd_display(lv_obj_t *label, uint8_t percent) {
+    lv_label_set_text_fmt(label, "%d%%", percent);
+    lv_obj_set_style_text_color(label, lv_color_hex(0xCCCCCC), 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    
+    // 超过90%显示红色
+    if(percent > 90) {
+        lv_obj_set_style_text_color(label, lv_color_hex(0xFF0000), 0);
+    }
+}
+
 void ui_Screen1_screen_init(void) {
     lv_display_t *disp = lv_display_get_default();
-    const int32_t hor_res = 480;  // 竖屏宽度
-    const int32_t ver_res = 800;  // 竖屏高度
+    const int32_t hor_res = 480;
+    const int32_t ver_res = 800;
 
     // 创建主容器
     ui_Screen1 = lv_obj_create(NULL);
@@ -58,27 +71,28 @@ void ui_Screen1_screen_init(void) {
     // 顶部状态栏
     lv_obj_t *status_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(status_bar);
-    lv_obj_set_size(status_bar, hor_res, 35);  // 增加高度
+    lv_obj_set_size(status_bar, hor_res, 35);
     lv_obj_set_style_pad_hor(status_bar, 15, 0);
     lv_obj_set_flex_flow(status_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(status_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(status_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, 
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // 左侧：SD卡剩余时间
-    lv_obj_t *sd_info = lv_obj_create(status_bar);
-    lv_obj_remove_style_all(sd_info);
-    lv_obj_set_flex_flow(sd_info, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(sd_info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // SD卡状态组件
+    lv_obj_t *sd_container = lv_obj_create(status_bar);
+    lv_obj_remove_style_all(sd_container);
+    lv_obj_set_flex_flow(sd_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(sd_container, LV_FLEX_ALIGN_CENTER, 
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    lv_obj_t *sd_icon = lv_label_create(sd_info);
+    // SD卡图标
+    lv_obj_t *sd_icon = lv_label_create(sd_container);
     lv_label_set_text(sd_icon, LV_SYMBOL_SD_CARD);
     lv_obj_set_style_text_color(sd_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(sd_icon, &lv_font_montserrat_16, 0);
     
-    lv_obj_t *sd_label = lv_label_create(sd_info);
-    lv_label_set_text(sd_label, "1:00:00");
-    lv_obj_set_style_text_color(sd_label, lv_color_hex(0xCCCCCC), 0);
-    lv_obj_set_style_text_font(sd_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_pad_left(sd_label, 5, 0);
+    // 初始化SD卡状态模块
+    sd_status_init(sd_container);  // 传入父容器
+    sd_set_display_callback(custom_sd_display);
 
     // 中间左侧：录制模式
     lv_obj_t *rec_mode = lv_label_create(status_bar);
@@ -90,10 +104,11 @@ void ui_Screen1_screen_init(void) {
     lv_obj_t *gnss_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(gnss_info);
     lv_obj_set_flex_flow(gnss_info, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(gnss_info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(gnss_info, LV_FLEX_ALIGN_CENTER, 
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     lv_obj_t *gnss_icon = lv_label_create(gnss_info);
-    lv_label_set_text(gnss_icon, LV_SYMBOL_GPS);  // 使用GPS符号代替卫星
+    lv_label_set_text(gnss_icon, LV_SYMBOL_GPS);
     lv_obj_set_style_text_color(gnss_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(gnss_icon, &lv_font_montserrat_16, 0);
     
@@ -107,7 +122,8 @@ void ui_Screen1_screen_init(void) {
     lv_obj_t *battery_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(battery_info);
     lv_obj_set_flex_flow(battery_info, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(battery_info, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(battery_info, LV_FLEX_ALIGN_CENTER, 
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
     lv_obj_t *bat_label = lv_label_create(battery_info);
     lv_label_set_text(bat_label, "80%");
@@ -123,13 +139,13 @@ void ui_Screen1_screen_init(void) {
     // 视频预览容器
     lv_obj_t *video_container = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(video_container);
-    lv_obj_set_size(video_container, hor_res, ver_res - 100); // 留出状态栏和按钮空间
+    lv_obj_set_size(video_container, hor_res, ver_res - 100);
     lv_obj_align(video_container, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_set_style_bg_color(video_container, lv_color_hex(0x222222), 0);
 
     // 视频预览区域
     lv_obj_t *video_area = lv_image_create(video_container);
-    lv_obj_set_size(video_area, 480, 640); // 竖屏适配
+    lv_obj_set_size(video_area, 480, 640);
     lv_obj_center(video_area);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x333333), 0);
 
@@ -139,7 +155,8 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_size(bottom_bar, hor_res, 70);
     lv_obj_align(bottom_bar, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_flex_flow(bottom_bar, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(bottom_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(bottom_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, 
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(bottom_bar, 20, 0);
 
     // 左下角预览按钮

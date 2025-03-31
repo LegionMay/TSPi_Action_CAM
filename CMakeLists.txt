@@ -21,6 +21,7 @@ target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR})
 set(UI_SOURCES
     ${PROJECT_SOURCE_DIR}/ui/screens/ui_Screen1.c
     ${PROJECT_SOURCE_DIR}/ui/screens/ui_Menu.c
+    ${PROJECT_SOURCE_DIR}/ui/sdcard/sd_status.c
     ${PROJECT_SOURCE_DIR}/ui/ui.c
     ${PROJECT_SOURCE_DIR}/ui/components/ui_comp_hook.c
     ${PROJECT_SOURCE_DIR}/ui/ui_helpers.c
@@ -84,6 +85,7 @@ else()
     target_include_directories(lvglsim PUBLIC
         ${PROJECT_SOURCE_DIR}/ui
         ${PROJECT_SOURCE_DIR}/ui/screens
+        ${PROJECT_SOURCE_DIR}/ui/sdcard
         ${PROJECT_SOURCE_DIR}/ui/components
     )
     target_include_directories(lvglsim PUBLIC ${GST_INCLUDE_DIRS})
