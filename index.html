@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>TSPi Action - 泰山派运动相机</title>
-    <!-- 本地Leaflet资源 -->
-    <link rel="stylesheet" href="/leaflet/leaflet.css"/>
+    <!-- 使用国内CDN的Leaflet资源 -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.css"/>
     <style>
         :root {
             --primary-color: #2196F3;
             --secondary-color: #607D8B;
         }
 
-         /* 高级黑灰标题 */
-         .header {
+        .header {
             text-align: center;
             margin-bottom: 30px;
             padding: 1.5rem;
@@ -212,8 +211,8 @@
         </div>
     </div>
 
-    <!-- 本地Leaflet JS -->
-    <script src="/leaflet/leaflet.js"></script>
+    <!-- 使用国内CDN的Leaflet JS -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.js"></script>
     <script>
         let currentTab = 'device';
         let mapInstance = null;
@@ -252,36 +251,44 @@
             }
         }
 
-        // 加载视频文件
+        // 加载视频文件（修复版）
         async function loadVideoFiles() {
             try {
-                const response = await fetch('/mnt/sdcard/');
+                const response = await fetch('/');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(data, 'text/html');
                 
-                let files = Array.from(doc.querySelectorAll('tr'))
-                    .slice(1)
+                // 增强表格解析逻辑
+                const files = Array.from(doc.querySelectorAll('tr'))
+                    .slice(1) // 跳过表头
                     .map(tr => {
                         const tds = tr.querySelectorAll('td');
-                        return tds.length >= 3 ? {
-                            name: tds[0].querySelector('a').textContent,
-                            path: tds[0].querySelector('a').href,
-                            size: parseInt(tds[1].textContent),
-                            date: tds[2].textContent,
+                        if (tds.length < 3) return null;
+                        
+                        const link = tds[0].querySelector('a');
+                        if (!link) return null;
+
+                        // 构建绝对路径
+                        const absolutePath = new URL(link.href, window.location.href).pathname;
+                        
+                        return {
+                            name: link.textContent.trim(),
+                            path: absolutePath,
+                            size: parseInt(tds[1].textContent) || 0,
+                            date: tds[2].textContent.trim(),
                             isExample: false
-                        } : null;
+                        };
                     })
-                    .filter(file => file && /\.(mp4|mkv)$/i.test(file.name));
+                    .filter(file => {
+                        return file && /\.(mkv|mp4)$/i.test(file.name); // 修复大小写问题
+                    });
 
-                // 添加示例数据
-                if(files.length === 0) {
-                    files.push(exampleData.video);
-                }
-
-                renderFileList(files);
+                // 当无文件时显示示例
+                renderFileList(files.length > 0 ? files : [exampleData.video]);
             } catch (error) {
-                console.error('文件加载失败，显示示例数据');
+                console.error('文件加载失败:', error);
                 renderFileList([exampleData.video]);
             }
         }
@@ -315,13 +322,9 @@
             
             // 初始化视频播放器
             const player = document.getElementById('video-player');
-            if(file.isExample) {
-                player.src = exampleData.video.path;
-                player.controls = true;
-            } else {
-                player.src = file.path;
-            }
-            
+            player.src = file.isExample ? exampleData.video.path : file.path;
+            player.controls = true;
+
             // 加载定位数据
             const coords = file.isExample ? 
                 exampleData.gnss : 
@@ -336,6 +339,7 @@
                 downloadBtn.onclick = () => alert('示例文件不支持下载');
             } else {
                 downloadBtn.href = file.path;
+                downloadBtn.download = file.name;
                 downloadBtn.onclick = null;
             }
         }
@@ -344,6 +348,7 @@
         async function loadGPSData(jsonFile) {
             try {
                 const response = await fetch(jsonFile);
+                if (!response.ok) throw new Error('HTTP error');
                 return await response.json();
             } catch (error) {
                 console.error('定位数据加载失败，使用示例数据');
@@ -351,7 +356,7 @@
             }
         }
 
-        // 初始化离线地图
+        // 初始化在线地图（高德）
         function initMap(coords) {
             if(mapInstance) {
                 mapInstance.remove();
@@ -361,13 +366,24 @@
                 attributionControl: false
             }).setView([coords.latitude, coords.longitude], 15);
 
-            // 加载本地离线瓦片
-            L.tileLayer('/offline-map/{z}/{x}/{y}.png').addTo(mapInstance);
-            
+            // 高德地图图层
+            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                subdomains: ['1', '2', '3', '4'],
+                maxZoom: 19,
+                tileSize: 256,
+                zoomOffset: 0
+            }).addTo(mapInstance);
+
             // 添加标记
             L.marker([coords.latitude, coords.longitude])
-                .bindPopup(this.createPopupContent(coords))
+                .bindPopup(createPopupContent(coords))
                 .addTo(mapInstance);
+
+            // 错误处理
+            mapInstance.on('tileerror', function(e) {
+                console.warn('地图加载失败:', e.coords);
+                e.tile.src = e.tile.src; // 强制重试
+            });
         }
 
         // 创建地图弹窗内容
