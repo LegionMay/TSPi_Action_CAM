@@ -2,8 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TSPi Action - 泰山派运动相机</title>
-    <!-- 使用国内CDN的Leaflet资源 -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.css"/>
     <style>
         :root {
@@ -211,130 +212,159 @@
         </div>
     </div>
 
-    <!-- 使用国内CDN的Leaflet JS -->
+    <!-- Leaflet JS -->
     <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.js"></script>
     <script>
-        let currentTab = 'device';
-        let mapInstance = null;
-
-        // 示例数据
-        const exampleData = {
-            video: {
-                name: "示例视频.mp4",
-                path: "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAABNttZGF0AAAAL...",
-                size: 5242880, // 5MB
-                date: "2024-03-20 14:30",
-                isExample: true
-            },
-            gnss: {
-                timestamp: "1710927000",
-                latitude: 39.9042,
-                longitude: 116.4074,
-                satellites: 8,
-                altitude: 52.3,
-                record_time: "20240320_143000"
+        // 全局状态管理
+        const AppState = {
+            currentTab: 'device',
+            mapInstance: null,
+            fileListLoaded: false,
+            exampleData: {
+                video: {
+                    name: "示例视频.mp4",
+                    path: "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAABNttZGF0AAAAL...",
+                    size: 5242880,
+                    date: "2024-03-20 14:30",
+                    isExample: true
+                },
+                gnss: {
+                    timestamp: "1710927000",
+                    latitude: 39.9042,
+                    longitude: 116.4074,
+                    satellites: 8,
+                    altitude: 52.3,
+                    record_time: "20240320_143000"
+                }
             }
         };
 
         // 选项卡切换
         function showTab(tab) {
+            AppState.currentTab = tab;
             document.getElementById('deviceTab').style.display = tab === 'device' ? 'grid' : 'none';
             document.getElementById('videoTab').style.display = tab === 'video' ? 'block' : 'none';
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.currentTarget.classList.add('active');
             
-            if(tab === 'video' && !window.fileListLoaded) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.trim() === (tab === 'device' ? '设备信息' : '视频管理'));
+            });
+
+            if(tab === 'video' && !AppState.fileListLoaded) {
                 loadVideoFiles();
-                window.fileListLoaded = true;
+                AppState.fileListLoaded = true;
             }
         }
 
-        // 加载视频文件（修复版）
+        // 增强版文件加载
         async function loadVideoFiles() {
             try {
+                const startTime = performance.now();
                 const response = await fetch('/');
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const data = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(data, 'text/html');
                 
-                // 增强表格解析逻辑
-                const files = Array.from(doc.querySelectorAll('tr'))
-                    .slice(1) // 跳过表头
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // 精确解析表格结构
+                const fileItems = Array.from(doc.querySelectorAll('tr'))
+                    .slice(1)
                     .map(tr => {
                         const tds = tr.querySelectorAll('td');
                         if (tds.length < 3) return null;
                         
                         const link = tds[0].querySelector('a');
-                        if (!link) return null;
+                        if (!link || !link.href) return null;
 
-                        // 构建绝对路径
-                        const absolutePath = new URL(link.href, window.location.href).pathname;
-                        
                         return {
                             name: link.textContent.trim(),
-                            path: absolutePath,
-                            size: parseInt(tds[1].textContent) || 0,
+                            path: new URL(link.href, location.href).pathname,
+                            size: parseInt(tds[1].textContent.replace(/[^0-9]/g, '')) || 0,
                             date: tds[2].textContent.trim(),
                             isExample: false
                         };
                     })
                     .filter(file => {
-                        return file && /\.(mkv|mp4)$/i.test(file.name); // 修复大小写问题
+                        return file && 
+                               /\.(mkv|mp4)$/i.test(file.name) &&
+                               file.size > 1024; // 过滤无效文件
                     });
 
-                // 当无文件时显示示例
-                renderFileList(files.length > 0 ? files : [exampleData.video]);
+                console.log(`加载完成，耗时：${(performance.now() - startTime).toFixed(1)}ms`);
+                renderFileList(fileItems.length > 0 ? fileItems : [AppState.exampleData.video]);
             } catch (error) {
                 console.error('文件加载失败:', error);
-                renderFileList([exampleData.video]);
+                renderFileList([AppState.exampleData.video]);
             }
         }
 
-        // 渲染文件列表
+        // 优化渲染性能
         function renderFileList(files) {
             const container = document.getElementById('fileList');
-            container.innerHTML = '';
+            const fragment = document.createDocumentFragment();
             
             files.forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'file-item';
                 item.innerHTML = `
                     <span>
-                        ${file.name}
+                        ${escapeHTML(file.name)}
                         ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
                     </span>
                     <span>${formatSize(file.size)}</span>
-                    <span>${file.date}</span>
+                    <span>${escapeHTML(file.date)}</span>
                 `;
-
-                item.addEventListener('click', () => showVideoDetail(file));
-                container.appendChild(item);
+                item.dataset.filePath = encodeURI(file.path);
+                fragment.appendChild(item);
             });
+
+            // 使用事件委托
+            container.replaceChildren(fragment);
+            container.addEventListener('click', handleFileClick);
+        }
+
+        // 文件点击处理
+        function handleFileClick(event) {
+            const item = event.target.closest('.file-item');
+            if (item) {
+                const file = {
+                    name: decodeURI(item.dataset.filePath.split('/').pop()),
+                    path: decodeURI(item.dataset.filePath),
+                    size: parseInt(item.children[1].textContent.match(/(\d+\.?\d*)/)[0]),
+                    date: item.children[2].textContent,
+                    isExample: item.querySelector('.example-badge') !== null
+                };
+                showVideoDetail(file);
+            }
         }
 
         // 显示视频详情
         async function showVideoDetail(file) {
             document.querySelector('.file-list').style.display = 'none';
             document.querySelector('.video-detail').style.display = 'block';
-            
-            // 初始化视频播放器
+
             const player = document.getElementById('video-player');
-            player.src = file.isExample ? exampleData.video.path : file.path;
-            player.controls = true;
+            try {
+                player.src = file.isExample ? AppState.exampleData.video.path : file.path;
+                await player.play().catch(() => {}); // 自动播放处理
+                
+                // 异步加载地图
+                const coords = await loadGPSData(
+                    file.name.replace(/\.[^.]+$/, '') + '.json'
+                );
+                initMap(coords);
+            } catch (error) {
+                console.error('视频初始化失败:', error);
+                player.src = '';
+                alert('视频加载失败，请检查文件格式和权限');
+            }
 
-            // 加载定位数据
-            const coords = file.isExample ? 
-                exampleData.gnss : 
-                await loadGPSData(file.name.replace(/\.[^.]+$/, '') + '.json');
-            
-            initMap(coords);
-
-            // 设置下载链接
+            // 下载按钮处理
             const downloadBtn = document.getElementById('downloadBtn');
-            if(file.isExample) {
+            if (file.isExample) {
                 downloadBtn.href = "#";
                 downloadBtn.onclick = () => alert('示例文件不支持下载');
             } else {
@@ -344,49 +374,75 @@
             }
         }
 
-        // 加载GPS数据
-        async function loadGPSData(jsonFile) {
-            try {
-                const response = await fetch(jsonFile);
-                if (!response.ok) throw new Error('HTTP error');
-                return await response.json();
-            } catch (error) {
-                console.error('定位数据加载失败，使用示例数据');
-                return exampleData.gnss;
-            }
-        }
-
-        // 初始化在线地图（高德）
+        // 地图初始化（高德+腾讯双方案）
         function initMap(coords) {
-            if(mapInstance) {
-                mapInstance.remove();
+            if (AppState.mapInstance) {
+                AppState.mapInstance.remove();
             }
-            
-            mapInstance = L.map('map-container', {
+
+            AppState.mapInstance = L.map('map-container', {
+                center: [coords.latitude, coords.longitude],
+                zoom: 15,
                 attributionControl: false
-            }).setView([coords.latitude, coords.longitude], 15);
+            });
 
-            // 高德地图图层
-            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-                subdomains: ['1', '2', '3', '4'],
-                maxZoom: 19,
-                tileSize: 256,
-                zoomOffset: 0
-            }).addTo(mapInstance);
+            // 高德地图层
+            const amapLayer = L.tileLayer(
+                'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                    subdomains: ['1', '2', '3', '4'],
+                    maxZoom: 19,
+                    tileSize: 256,
+                    detectRetina: true
+                }
+            );
 
-            // 添加标记
+            // 腾讯备用层
+            const tencentLayer = L.tileLayer(
+                'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=6', {
+                    subdomains: ['0', '1', '2', '3'],
+                    maxZoom: 19
+                }
+            );
+
+            // 自动切换逻辑
+            amapLayer.addTo(AppState.mapInstance).on('tileerror', () => {
+                amapLayer.remove();
+                tencentLayer.addTo(AppState.mapInstance);
+                console.warn('已切换备用地图源');
+            });
+
+            // 标记点
             L.marker([coords.latitude, coords.longitude])
                 .bindPopup(createPopupContent(coords))
-                .addTo(mapInstance);
-
-            // 错误处理
-            mapInstance.on('tileerror', function(e) {
-                console.warn('地图加载失败:', e.coords);
-                e.tile.src = e.tile.src; // 强制重试
-            });
+                .addTo(AppState.mapInstance);
         }
 
-        // 创建地图弹窗内容
+        // 工具函数
+        function escapeHTML(str) {
+            return str.replace(/&/g, '&amp;')
+                     .replace(/</g, '&lt;')
+                     .replace(/>/g, '&gt;')
+                     .replace(/"/g, '&quot;')
+                     .replace(/'/g, '&#039;');
+        }
+
+        function formatSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) {
+                bytes /= 1024;
+                i++;
+            }
+            return `${bytes.toFixed(i > 0 ? 2 : 0)} ${units[i]}`;
+        }
+
+        function formatTime(timeStr) {
+            return timeStr.replace(
+                /(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/,
+                '$1-$2-$3 $4:$5:$6'
+            );
+        }
+
         function createPopupContent(coords) {
             return `
                 <b>记录时间:</b> ${formatTime(coords.record_time)}<br>
@@ -396,32 +452,16 @@
             `;
         }
 
-        // 返回列表
         function backToList() {
             document.querySelector('.file-list').style.display = 'block';
             document.querySelector('.video-detail').style.display = 'none';
-            if(mapInstance) {
-                mapInstance.remove();
-                mapInstance = null;
+            if (AppState.mapInstance) {
+                AppState.mapInstance.remove();
+                AppState.mapInstance = null;
             }
         }
 
-        // 工具函数
-        function formatSize(bytes) {
-            const units = ['B', 'KB', 'MB', 'GB'];
-            let i = 0;
-            while (bytes >= 1024 && i < units.length) {
-                bytes /= 1024;
-                i++;
-            }
-            return bytes.toFixed(2) + ' ' + units[i];
-        }
-
-        function formatTime(timeStr) {
-            return timeStr.replace(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/, '$1-$2-$3 $4:$5:$6');
-        }
-
-        // 初始化显示设备信息页
+        // 初始化
         showTab('device');
     </script>
 </body>
