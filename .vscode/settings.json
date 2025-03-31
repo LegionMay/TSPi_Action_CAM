@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "config.h": "c",
+        "pipeline.h": "c",
+        "shm_utils.h": "c"
+    }
+}

@@ -24,9 +24,11 @@ sys/shm.h
 gst/gst.h
 -
 
+/app/Video/include/config.h
+
 /app/Video/src/config.c
-config.h
-/app/Video/src/config.h
+../include/config.h
+/app/Video/include/config.h
 stdlib.h
 -
 
@@ -62,12 +64,6 @@ shm_utils.h
 stdio.h
 -
 stdlib.h
--
-
-/app/Video/src/utils.c
-utils.h
-/app/Video/src/utils.h
-stdio.h
 -
 
 /usr/include/glib-2.0/glib-object.h

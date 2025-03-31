@@ -1,4 +1,4 @@
-#include "config.h"
+#include "../include/config.h"
 #include <stdlib.h>
 
 VideoConfig* load_config(void) {
@@ -10,8 +10,8 @@ VideoConfig* load_config(void) {
     config->record_width = 1920;
     config->record_height = 1080;
     config->record_framerate = 30;
-    config->preview_width = 0;    // 预览分辨率稍后计算
-    config->preview_height = 0;
+    config->preview_width = 800;    // 预览分辨率稍后计算
+    config->preview_height = 480;
     // TODO: 可扩展为从共享内存或文件读取配置参数
     return config;
 }

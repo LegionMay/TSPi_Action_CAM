@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 typedef struct {
-    int record_width;      // 录制宽度
+    int record_width ;      // 录制宽度
     int record_height;     // 录制高度
     int record_framerate;  // 录制帧率
     int preview_width;     // 预览宽度

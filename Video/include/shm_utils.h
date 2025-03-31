@@ -5,7 +5,7 @@
 #include <sys/shm.h>
 
 #define SHM_KEY 1234
-#define SHM_SIZE 1920 * 1080 * 4  // 默认支持1080p RGBA，可根据需要调整
+#define SHM_SIZE 800 * 480 * 4  // 默认支持1080p RGBA，可根据需要调整
 
 int create_shm(void);
 void* attach_shm(int shmid);
