@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/include/config.h
+ */
 #ifndef CONFIG_H
 #define CONFIG_H
 

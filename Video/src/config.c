@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/src/config.c
+ */
 #include "../include/config.h"
 #include <stdlib.h>
 

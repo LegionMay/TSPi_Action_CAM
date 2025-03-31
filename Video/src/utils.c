@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/src/utils.c
+ */
 #include "utils.h"
 #include <stdio.h>
 

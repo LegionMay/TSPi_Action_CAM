@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/include/shm_utils.h
+ */
 #ifndef SHM_UTILS_H
 #define SHM_UTILS_H
 

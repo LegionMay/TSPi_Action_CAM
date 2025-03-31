@@ -1,3 +1,8 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/src/main.c
+ */
+
 #include "pipeline.h"
 #include "shm_utils.h"
 #include "config.h"

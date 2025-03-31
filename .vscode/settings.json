@@ -3,5 +3,9 @@
         "config.h": "c",
         "pipeline.h": "c",
         "shm_utils.h": "c"
-    }
+    },
+    "fileheader.customMade": {
+    "Author": "LegionMay",
+    "FilePath": "Do not edit"
+}
 }

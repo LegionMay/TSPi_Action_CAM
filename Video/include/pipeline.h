@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/include/pipeline.h
+ */
 #ifndef PIPELINE_H
 #define PIPELINE_H
 

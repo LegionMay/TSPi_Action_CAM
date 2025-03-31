@@ -1,3 +1,8 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/Video/src/imu_utils.c
+ */
+
 #include "imu_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
