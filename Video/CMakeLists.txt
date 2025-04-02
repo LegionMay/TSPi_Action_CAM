@@ -39,4 +39,5 @@ target_link_libraries(VideoProcess
     ${GST_LIBRARIES}
     rockchip_mpp
     rga
+    pthread
 )

@@ -37,6 +37,14 @@ time.h
 -
 string.h
 -
+semaphore.h
+-
+pthread.h
+-
+fcntl.h
+-
+sys/stat.h
+-
 
 /usr/include/glib-2.0/glib-object.h
 gobject/gbinding.h
