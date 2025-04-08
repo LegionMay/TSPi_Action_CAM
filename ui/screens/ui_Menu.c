@@ -49,7 +49,7 @@ void ui_Screen2_screen_init(void) {
     lv_obj_set_style_text_color(res_label, lv_color_black(), 0);  // 黑字
     
     lv_obj_t *res_dropdown = lv_dropdown_create(res_row);
-    lv_dropdown_set_options(res_dropdown, "1080P30\n720P60\n720P30");
+    lv_dropdown_set_options(res_dropdown, "1080P30\n720P30");
     lv_obj_set_size(res_dropdown, 150, 40);
     lv_obj_set_style_text_font(res_dropdown, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(res_dropdown, lv_color_black(), 0);  // 下拉菜单黑字

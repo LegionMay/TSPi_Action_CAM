@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
+#include <dirent.h>
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
@@ -38,8 +40,15 @@ static lv_image_dsc_t video_img_dsc = {
         .h = 800,                                // 图像高度（旋转后）
     },
     .data_size = SHM_SIZE,                  // 数据大小（宽 × 高 × 4 字节）
-    .data = NULL,                                // 数据指针，稍后设置
+    .data = NULL,                           // 数据指针，稍后设置
 };
+
+// 返回按钮回调函数
+static void back_btn_event_cb(lv_event_t *e) {
+    lv_obj_t *back_btn = lv_event_get_target(e);
+    lv_obj_t *container = lv_obj_get_parent(back_btn);  // 获取父容器
+    lv_obj_delete(container);  // 删除容器
+}
 
 // Initialize named semaphore
 static void init_semaphore(void) {
@@ -68,26 +77,75 @@ static void init_record_control(void) {
 // Record button event callback
 static uint8_t is_recording = 0;
 static time_t start_time;
+static lv_obj_t *record_btn = NULL;  // 全局记录按钮对象，用于GPIO触发
 static void record_btn_event_cb(lv_event_t *e) {
-    lv_obj_t *record_btn = lv_event_get_target(e);
-    lv_obj_t *record_label = lv_obj_get_child(record_btn, 0);
+    lv_obj_t *btn = lv_event_get_target(e);
+    lv_obj_t *record_label = lv_obj_get_child(btn, 0);
     
     if (is_recording) {
         printf("Recording stopped\n");
         lv_label_set_text(record_label, LV_SYMBOL_PLAY);
-        lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
         record_control->is_recording = 0;  // 通知视频进程停止录制
     } else {
         printf("Recording started\n");
         lv_label_set_text(record_label, LV_SYMBOL_STOP);
-        lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
         record_control->is_recording = 1;  // 通知视频进程开始录制
         start_time = time(NULL);          // 记录开始时间
     }
     is_recording = !is_recording;
 }
 
-// Menu button event callback
+// Preview button event callback (列出MKV文件并添加返回按钮)
+static void preview_btn_event_cb(lv_event_t *e) {
+    DIR *dir;
+    struct dirent *entry;
+    char *path = "/mnt/sdcard";
+    
+    dir = opendir(path);
+    if (dir == NULL) {
+        perror("opendir failed");
+        return;
+    }
+    
+    // 创建一个容器用于文件列表和返回按钮
+    lv_obj_t *container = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(container, 400, 600);
+    lv_obj_center(container);
+    lv_obj_set_style_bg_color(container, lv_color_hex(0x333333), 0);
+
+    // 创建文件列表
+    lv_obj_t *list = lv_list_create(container);
+    lv_obj_set_size(list, 400, 550);
+    lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 0);
+    
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {  // 只处理普通文件
+            char *ext = strrchr(entry->d_name, '.');
+            if (ext && strcmp(ext, ".mkv") == 0) {
+                lv_list_add_text(list, entry->d_name);
+            }
+        }
+    }
+    closedir(dir);
+
+    // 创建返回按钮
+    lv_obj_t *back_btn = lv_button_create(container);
+    lv_obj_set_size(back_btn, 100, 40);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x444444), 0);
+    
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    lv_obj_center(back_label);
+    lv_obj_set_style_text_color(back_label, lv_color_white(), 0);
+
+    // 返回按钮事件：删除容器（替换lambda为普通函数）
+    lv_obj_add_event_cb(back_btn, back_btn_event_cb, LV_EVENT_CLICKED, NULL);
+}
+
+// Menu button event callback (恢复原有功能)
 static void menu_btn_event_cb(lv_event_t *e) {
     lv_screen_load(ui_Screen2);
 }
@@ -241,7 +299,7 @@ void ui_Screen1_screen_init(void) {
     lv_obj_center(video_area);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x333333), 0);
 
-    // Bottom control bar (corrected variable name from bottom_bar to bottom_bar)
+    // Bottom control bar
     lv_obj_t *bottom_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(bottom_bar);
     lv_obj_set_size(bottom_bar, hor_res, 70);
@@ -251,11 +309,12 @@ void ui_Screen1_screen_init(void) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(bottom_bar, 20, 0);
 
-    // Preview button
+    // Preview button (绑定文件列表功能)
     lv_obj_t *preview_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(preview_btn, 50, 50);
     lv_obj_set_style_radius(preview_btn, 25, 0);
     lv_obj_set_style_bg_color(preview_btn, lv_color_hex(0x444444), 0);
+    lv_obj_add_event_cb(preview_btn, preview_btn_event_cb, LV_EVENT_CLICKED, NULL);  // 绑定文件列表
     
     lv_obj_t *preview_icon = lv_label_create(preview_btn);
     lv_label_set_text(preview_icon, LV_SYMBOL_VIDEO);
@@ -263,7 +322,11 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_color(preview_icon, lv_color_white(), 0);
 
     // Record button
-    lv_obj_t *record_btn = lv_button_create(ui_Screen1);
+    record_btn = lv_button_create(ui_Screen1);  // 使用全局变量
+    if (!record_btn) {
+        printf("Failed to create record_btn\n");
+        return;
+    }
     lv_obj_set_size(record_btn, 80, 80);
     lv_obj_align(record_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_obj_set_style_radius(record_btn, 40, 0);
@@ -276,12 +339,12 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_color(record_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(record_icon, &lv_font_montserrat_24, 0);
 
-    // Settings button
+    // Settings button (恢复原有功能)
     lv_obj_t *menu_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(menu_btn, 50, 50);
     lv_obj_set_style_radius(menu_btn, 25, 0);
     lv_obj_set_style_bg_color(menu_btn, lv_color_hex(0x444444), 0);
-    lv_obj_add_event_cb(menu_btn, menu_btn_event_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(menu_btn, menu_btn_event_cb, LV_EVENT_CLICKED, NULL);  // 恢复加载ui_Screen2
     
     lv_obj_t *menu_icon = lv_label_create(menu_btn);
     lv_label_set_text(menu_icon, LV_SYMBOL_SETTINGS);
@@ -302,4 +365,3 @@ void ui_Screen1_screen_init(void) {
 
     lv_screen_load(ui_Screen1);
 }
-
