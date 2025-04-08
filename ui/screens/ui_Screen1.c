@@ -12,23 +12,32 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
-#define SHM_SIZE 800 * 450 * 4  // Adjusted to match video pipeline output (800x450 ARGB)
+#define SHM_SIZE 800 * 450 * 3 + 1600 // Adjusted to match video pipeline output (800x450 ARGB)
+#define RECORD_SHM_KEY 5678     // 用于录制控制的共享内存键值
 
 // Semaphore pointer
 static sem_t *sem;
+
+// Shared memory structure for recording control
+typedef struct {
+    int is_recording;  // 0: not recording, 1: recording
+} RecordControl;
+
+static RecordControl *record_control = NULL;
 
 // Image descriptor for LVGL
 static lv_image_dsc_t video_img_dsc = {
     .header = {
         .magic = LV_IMAGE_HEADER_MAGIC,          // LVGL 图像头部魔数
-        .cf = LV_COLOR_FORMAT_ARGB8888,          // ARGB8888 格式（32 位）
+        .cf = LV_COLOR_FORMAT_RGB888,          // ARGB8888 格式（32 位）
         .w = 450,                                // 图像宽度（旋转后）
         .h = 800,                                // 图像高度（旋转后）
     },
-    .data_size = 800 * 450 * 4,                  // 数据大小（宽 × 高 × 4 字节）
+    .data_size = SHM_SIZE,                  // 数据大小（宽 × 高 × 4 字节）
     .data = NULL,                                // 数据指针，稍后设置
 };
 
@@ -41,9 +50,25 @@ static void init_semaphore(void) {
     }
 }
 
+// Initialize recording control shared memory
+static void init_record_control(void) {
+    int shmid = shmget(RECORD_SHM_KEY, sizeof(RecordControl), IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror("shmget failed for record control in UI process");
+        exit(1);
+    }
+    record_control = (RecordControl *)shmat(shmid, NULL, 0);
+    if (record_control == (void *)-1) {
+        perror("shmat failed for record control in UI process");
+        exit(1);
+    }
+    record_control->is_recording = 0;  // 初始化为未录制状态
+}
+
 // Record button event callback
+static uint8_t is_recording = 0;
+static time_t start_time;
 static void record_btn_event_cb(lv_event_t *e) {
-    static uint8_t is_recording = 0;
     lv_obj_t *record_btn = lv_event_get_target(e);
     lv_obj_t *record_label = lv_obj_get_child(record_btn, 0);
     
@@ -51,10 +76,13 @@ static void record_btn_event_cb(lv_event_t *e) {
         printf("Recording stopped\n");
         lv_label_set_text(record_label, LV_SYMBOL_PLAY);
         lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        record_control->is_recording = 0;  // 通知视频进程停止录制
     } else {
         printf("Recording started\n");
         lv_label_set_text(record_label, LV_SYMBOL_STOP);
         lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
+        record_control->is_recording = 1;  // 通知视频进程开始录制
+        start_time = time(NULL);          // 记录开始时间
     }
     is_recording = !is_recording;
 }
@@ -90,6 +118,21 @@ static void update_video_preview(lv_timer_t *timer) {
     sem_post(sem);
 }
 
+// Update recording time
+static lv_obj_t *record_time_label;
+static void update_record_time(lv_timer_t *timer) {
+    if (is_recording) {
+        time_t now = time(NULL);
+        int elapsed = (int)difftime(now, start_time);
+        int hours = elapsed / 3600;
+        int minutes = (elapsed % 3600) / 60;
+        int seconds = elapsed % 60;
+        lv_label_set_text_fmt(record_time_label, "%02d:%02d:%02d", hours, minutes, seconds);
+    } else {
+        lv_label_set_text(record_time_label, "00:00:00");
+    }
+}
+
 // Custom SD card display callback
 static void custom_sd_display(lv_obj_t *label, uint8_t percent) {
     lv_label_set_text_fmt(label, "%d%%", percent);
@@ -107,8 +150,9 @@ void ui_Screen1_screen_init(void) {
     const int32_t hor_res = 480;
     const int32_t ver_res = 800;
 
-    // Initialize semaphore before LVGL setup
+    // Initialize semaphore and record control before LVGL setup
     init_semaphore();
+    init_record_control();
 
     // Create main container
     ui_Screen1 = lv_obj_create(NULL);
@@ -197,7 +241,7 @@ void ui_Screen1_screen_init(void) {
     lv_obj_center(video_area);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x333333), 0);
 
-    // Bottom control bar (corrected variable name from custom_bar to bottom_bar)
+    // Bottom control bar (corrected variable name from bottom_bar to bottom_bar)
     lv_obj_t *bottom_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(bottom_bar);
     lv_obj_set_size(bottom_bar, hor_res, 70);
@@ -244,7 +288,18 @@ void ui_Screen1_screen_init(void) {
     lv_obj_center(menu_icon);
     lv_obj_set_style_text_color(menu_icon, lv_color_white(), 0);
 
+    // Record time label
+    record_time_label = lv_label_create(ui_Screen1);
+    lv_label_set_text(record_time_label, "00:00:00");
+    lv_obj_align(record_time_label, LV_ALIGN_BOTTOM_MID, 0, -100);
+    lv_obj_set_style_text_color(record_time_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(record_time_label, &lv_font_montserrat_24, 0);
+
     // Video update timer
     lv_timer_create(update_video_preview, 33, video_area);
+    // Record time update timer
+    lv_timer_create(update_record_time, 1000, NULL);
+
     lv_screen_load(ui_Screen1);
 }
+
