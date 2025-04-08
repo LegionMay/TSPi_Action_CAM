@@ -16,7 +16,7 @@
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
-#define SHM_SIZE 800 * 450 * 3 + 1600 // Adjusted to match video pipeline output (800x450 ARGB)
+#define SHM_SIZE 800 * 450 * 4
 #define RECORD_SHM_KEY 5678     // 用于录制控制的共享内存键值
 
 // Semaphore pointer
@@ -33,7 +33,7 @@ static RecordControl *record_control = NULL;
 static lv_image_dsc_t video_img_dsc = {
     .header = {
         .magic = LV_IMAGE_HEADER_MAGIC,          // LVGL 图像头部魔数
-        .cf = LV_COLOR_FORMAT_RGB888,          // ARGB8888 格式（32 位）
+        .cf = LV_COLOR_FORMAT_ARGB8888,          // ARGB8888 格式（32 位）
         .w = 450,                                // 图像宽度（旋转后）
         .h = 800,                                // 图像高度（旋转后）
     },
