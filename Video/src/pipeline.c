@@ -344,7 +344,7 @@ GstElement* create_pipeline(VideoConfig *config) {
 
     // Set ARGB conversion caps
     GstCaps *argb_caps = gst_caps_new_simple("video/x-raw",
-                                           "format", G_TYPE_STRING, "RGBA",
+                                           "format", G_TYPE_STRING, "BGRA",
                                            NULL);
     g_object_set(capsfilter_rgba, "caps", argb_caps, NULL);
     gst_caps_unref(argb_caps);
