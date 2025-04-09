@@ -9,6 +9,11 @@
 #include <string.h>
 #include <errno.h>
 #include "imu_logger.h"
+#define _GNU_SOURCE     // 启用GNU扩展
+#include <math.h>       // 包含数学库
+#include <stdlib.h>    // 定义 exit 和 EXIT_FAILURE
+#include <unistd.h>    // 定义 usleep
+
 
 // 创建消息队列
 int create_msg_queue(void) {
@@ -35,6 +40,8 @@ void send_to_msg_queue(int msqid, const imu_msg *msg) {
         exit(EXIT_FAILURE);
     }
 }
+
+static time_t file_start_time = 0;
 
 // 写入CSV文件
 void write_to_csv(const fused_data *data) {

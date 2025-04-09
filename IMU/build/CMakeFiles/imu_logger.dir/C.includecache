@@ -55,6 +55,12 @@ errno.h
 -
 imu_logger.h
 /app/IMU/src/imu_logger.h
+math.h
+-
+stdlib.h
+-
+unistd.h
+-
 
 /app/IMU/src/main.c
 stdio.h
@@ -75,6 +81,8 @@ imu_logger.h
 /app/IMU/src/imu_logger.h
 i2c_utils.h
 /app/IMU/src/i2c_utils.h
+math.h
+-
 
 /app/IMU/src/sensor_read.c
 unistd.h
@@ -85,4 +93,8 @@ linux/i2c-dev.h
 -
 imu_logger.h
 /app/IMU/src/imu_logger.h
+stdlib.h
+-
+unistd.h
+-
 

@@ -19,7 +19,7 @@ int ak8963_init(const char *device, int addr) {
         0x0B, 0x01    // 自检模式
     };
 
-    for (int i=0; i<sizeof(init_seq); i+=2) {
+    for (size_t i=0; i<sizeof(init_seq); i+=2) {
         if (i2c_write_reg(ak_fd, init_seq[i], init_seq[i+1]) != 0) {
             return 0;
         }

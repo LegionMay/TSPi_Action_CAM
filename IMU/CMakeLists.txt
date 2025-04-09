@@ -13,4 +13,4 @@ add_executable(imu_logger
     src/sensor_read.c
     src/logger.c)
 
-target_link_libraries(imu_logger pthread)
+target_link_libraries(imu_logger pthread m)

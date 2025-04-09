@@ -1,6 +1,8 @@
 /* ---------- src/mpu6500.c ---------- */
 #include "imu_logger.h"
 #include "i2c_utils.h"
+#define _GNU_SOURCE     // 启用GNU扩展
+#include <math.h>       // 包含数学库
 
 static int mpu_fd = -1;
 
@@ -17,7 +19,7 @@ int mpu6500_init(const char *device, int addr) {
         0x19, 0x04    // 采样率1kHz
     };
 
-    for (int i=0; i<sizeof(init_seq); i+=2) {
+   for (size_t i=0; i<sizeof(init_seq); i+=2) {
         if (i2c_write_reg(mpu_fd, init_seq[i], init_seq[i+1]) != 0) {
             return 0;
         }

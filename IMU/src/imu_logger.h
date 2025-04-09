@@ -56,5 +56,9 @@ int create_msg_queue(void);
 void send_to_msg_queue(int msqid, const imu_msg *msg);
 void* sensor_read_thread(void *arg);
 void* logging_thread(void *arg);
+// 在头文件中添加函数声明
+int read_mpu6500_data(imu_raw_data *data);
+int read_ak8963_data(imu_raw_data *data);
+void complementary_filter(const imu_raw_data *raw, fused_data *out);
 
 #endif

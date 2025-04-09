@@ -12,18 +12,32 @@
 #define BUFFER_SIZE 1024
 #define JSON_PATH "/mnt/sdcard/gnss_data.json"
 #define FIFO_PATH "/tmp/gnss_control_fifo"
+#define UI_FIFO_PATH "/tmp/gnss_ui_fifo"  // 新增UI通信管道路径
+#define RECORD_INTERVAL 10  // 记录间隔，单位为秒
+
+// 全局GNSS数据，用于线程间共享
+static GnssData current_gnss_data;
+static pthread_mutex_t data_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// 格式化时间为字符串
+char* format_time(time_t time_value) {
+    static char buffer[64];
+    struct tm *tm_info = localtime(&time_value);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+    return buffer;
+}
 
 // GNSS数据读取线程
 void* gnss_reading_thread(void* arg) {
     GnssControl* control = (GnssControl*)arg;
     int serial_fd;
     char buffer[BUFFER_SIZE];
-    GnssData gnss_data;
+    time_t last_record_time = 0;
     
     while (1) {
         // 检查是否应该运行
         if (!is_gnss_running(control)) {
-            sleep(1);  // 未运行时降低CPU使用率
+            sleep(1);
             continue;
         }
         
@@ -31,11 +45,15 @@ void* gnss_reading_thread(void* arg) {
         serial_fd = open(SERIAL_PORT, O_RDONLY | O_NOCTTY);
         if (serial_fd < 0) {
             perror("Failed to open serial port");
-            sleep(5);  // 失败后等待一段时间再重试
+            sleep(5);
             continue;
         }
         
         printf("GNSS data collection started\n");
+        
+        // 记录开始时间，用于计算下一次记录时间
+        time_t now = time(NULL);
+        last_record_time = now;
         
         // 当运行标志为1时，持续读取数据
         while (is_gnss_running(control)) {
@@ -44,18 +62,85 @@ void* gnss_reading_thread(void* arg) {
                 buffer[bytes_read] = '\0';
                 
                 // 解析NMEA数据
-                if (parse_nmea(buffer, &gnss_data)) {
-                    // 保存为JSON
-                    save_to_json(&gnss_data, JSON_PATH);
+                GnssData temp_data;
+                if (parse_nmea(buffer, &temp_data)) {
+                    // 获取当前时间
+                    now = time(NULL);
+                    temp_data.record_time = now;
+                    
+                    // 更新全局GNSS数据
+                    pthread_mutex_lock(&data_mutex);
+                    memcpy(&current_gnss_data, &temp_data, sizeof(GnssData));
+                    pthread_mutex_unlock(&data_mutex);
+                    
+                    // 检查是否达到记录间隔（10秒）
+                    if (difftime(now, last_record_time) >= RECORD_INTERVAL) {
+                        // 保存为JSON
+                        save_to_json(&temp_data, JSON_PATH);
+                        last_record_time = now;
+                    }
                 }
             }
             
-            // 休眠2秒
-            sleep(2);
+            // 短暂休眠以降低CPU使用率
+            usleep(500000);  // 0.5秒
         }
         
         close(serial_fd);
         printf("GNSS data collection stopped\n");
+    }
+    
+    return NULL;
+}
+
+// UI更新线程 - 每10秒发送卫星数到UI
+void* ui_update_thread(void* arg) {
+    GnssControl* control = (GnssControl*)arg;
+    int fifo_fd;
+    time_t last_update_time = 0;
+    char buffer[32];
+    
+    // 创建UI通信管道
+    unlink(UI_FIFO_PATH);
+    if (mkfifo(UI_FIFO_PATH, 0666) < 0) {
+        perror("Failed to create UI FIFO");
+        return NULL;
+    }
+    
+    printf("UI update thread started. FIFO: %s\n", UI_FIFO_PATH);
+    
+    while (1) {
+        // 即使GNSS没有运行，也尝试更新UI（显示0颗卫星）
+        time_t now = time(NULL);
+        
+        // 每10秒更新一次UI
+        if (difftime(now, last_update_time) >= RECORD_INTERVAL) {
+            // 打开FIFO用于写入
+            fifo_fd = open(UI_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+            if (fifo_fd >= 0) {
+                int satellites = 0;
+                
+                // 如果GNSS在运行，使用当前数据
+                if (is_gnss_running(control)) {
+                    pthread_mutex_lock(&data_mutex);
+                    satellites = current_gnss_data.satellites;
+                    pthread_mutex_unlock(&data_mutex);
+                }
+                
+                // 发送卫星数到UI
+                snprintf(buffer, sizeof(buffer), "%d", satellites);
+                write(fifo_fd, buffer, strlen(buffer));
+                close(fifo_fd);
+                
+                printf("Sent satellites count to UI: %d\n", satellites);
+                last_update_time = now;
+            } else if (errno != ENXIO) {  // 忽略"没有进程在读取"的错误
+                perror("Failed to open UI FIFO for writing");
+            }
+        }
+        
+        // 休眠1秒
+        sleep(1);
     }
     
     return NULL;
@@ -68,7 +153,7 @@ void* command_listener_thread(void* arg) {
     char cmd[20];
     
     // 创建命名管道
-    unlink(FIFO_PATH);  // 删除可能已存在的FIFO
+    unlink(FIFO_PATH);
     if (mkfifo(FIFO_PATH, 0666) < 0) {
         perror("Failed to create FIFO");
         return NULL;
@@ -178,34 +263,33 @@ int parse_nmea(const char* buffer, GnssData* data) {
     return 0; // 没有找到有效数据
 }
 
-// 保存为JSON格式
+// 保存为JSON格式 - 使用简洁英文标签
 void save_to_json(const GnssData* data, const char* filepath) {
     FILE* fp;
-    time_t now;
-    struct tm *t;
-    char timestamp[64];
+    char filename[256];
     
-    // 获取当前时间作为文件名
-    time(&now);
-    t = localtime(&now);
-    strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", t);
+    // 创建文件名，使用与录制视频相同的格式
+    time_t now = data->record_time;
+    struct tm *t = localtime(&now);
+    snprintf(filename, sizeof(filename), "/mnt/sdcard/gnss_%04d%02d%02d_%02d%02d%02d.json",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, 
+             t->tm_hour, t->tm_min, t->tm_sec);
     
-    // 追加模式打开文件
-    fp = fopen(filepath, "a");
+    // 创建或追加模式打开文件
+    fp = fopen(filename, "w");
     if (fp == NULL) {
         perror("Failed to open file for writing");
         return;
     }
     
-    // 写入JSON格式数据
+    // 写入JSON格式数据 - 使用简洁的英文标签
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"timestamp\": \"%s\",\n", data->timestamp);
-    fprintf(fp, "  \"latitude\": %.6f,\n", data->latitude);
-    fprintf(fp, "  \"longitude\": %.6f,\n", data->longitude);
-    fprintf(fp, "  \"satellites\": %d,\n", data->satellites);
-    fprintf(fp, "  \"altitude\": %.2f,\n", data->altitude);
-    fprintf(fp, "  \"record_time\": \"%s\"\n", timestamp);
+    fprintf(fp, "  \"time\": \"%s\",\n", format_time(data->record_time));
+    fprintf(fp, "  \"coords\": \"%f, %f\",\n", data->latitude, data->longitude);
+    fprintf(fp, "  \"alt\": \"%.1fm\",\n", data->altitude);
+    fprintf(fp, "  \"sats\": %d\n", data->satellites);
     fprintf(fp, "}\n");
     
     fclose(fp);
+    printf("GNSS data saved to %s\n", filename);
 }

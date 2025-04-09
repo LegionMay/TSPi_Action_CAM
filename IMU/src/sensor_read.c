@@ -7,6 +7,8 @@
 #include <math.h>
 #include <linux/i2c-dev.h>
 #include "imu_logger.h"
+#include <stdlib.h>    // 定义 exit 和 EXIT_FAILURE
+#include <unistd.h>    // 定义 usleep
 
 // MPU6500数据采集
 void* sensor_read_thread(void *arg) {

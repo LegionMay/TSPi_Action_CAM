@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/GNSS/src/main.c
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -16,7 +20,7 @@ void signal_handler(int sig) {
 }
 
 int main() {
-    pthread_t gnss_thread, cmd_thread;
+    pthread_t gnss_thread, cmd_thread, ui_thread;
     int ret;
     
     // 初始化控制结构
@@ -40,6 +44,13 @@ int main() {
     ret = pthread_create(&gnss_thread, NULL, gnss_reading_thread, &g_control);
     if (ret != 0) {
         perror("Failed to create GNSS thread");
+        return 1;
+    }
+    
+    // 创建UI更新线程
+    ret = pthread_create(&ui_thread, NULL, ui_update_thread, &g_control);
+    if (ret != 0) {
+        perror("Failed to create UI update thread");
         return 1;
     }
     
