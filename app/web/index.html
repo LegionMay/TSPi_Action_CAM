@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSPi Action - 泰山派运动相机</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.css"/>
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --secondary-color: #607D8B;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 1.5rem;
+            background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .main-title {
+            color: #e0e0e0;
+            font-size: 2.8em;
+            margin: 0;
+            font-family: 'Helvetica Neue', sans-serif;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+            display: inline-block;
+        }
+
+        .main-title::after {
+            content: '';
+            display: block;
+            width: 60%;
+            height: 2px;
+            background: #5a5a5a;
+            margin: 12px auto 0;
+            opacity: 0.8;
+        }
+
+        .author {
+            color: #909090;
+            font-size: 0.9em;
+            margin-top: 15px;
+            letter-spacing: 1px;
+            font-family: 'Courier New', monospace;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .tab-nav {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--secondary-color);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .info-card {
+            padding: 20px;
+            border-left: 4px solid var(--primary-color);
+            background: #f8f9fa;
+        }
+
+        .info-card h3 {
+            color: var(--secondary-color);
+            margin: 0 0 10px 0;
+        }
+
+        .video-manager {
+            display: none;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .file-list {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+
+        .video-detail {
+            display: none;
+        }
+
+        #video-player {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 8px;
+        }
+
+        #map-container {
+            height: 400px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .example-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+
+        .detail-actions {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .data-downloads {
+            margin-top: 15px;
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .data-downloads h3 {
+            margin-top: 0;
+            color: var(--secondary-color);
+        }
+
+        .download-btn {
+            padding: 6px 12px;
+            margin-right: 8px;
+            background-color: #607D8B;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 14px;
+        }
+
+        .imu-data {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 class="main-title">TSPi Action 泰山派运动相机</h1>
+        <div class="author">Developed by GitHub@LegionMay</div>
+    </div>
+
+    <div class="tab-nav">
+        <button class="tab-btn active" onclick="showTab('device')">设备信息</button>
+        <button class="tab-btn" onclick="showTab('video')">视频管理</button>
+    </div>
+
+    <!-- 设备信息页 -->
+    <div id="deviceTab" class="device-info">
+        <div class="info-card">
+            <h3>处理器</h3>
+            <p>RK3566<br>四核ARM Cortex A55 @ 2.0GHz</p>
+        </div>
+        <div class="info-card">
+            <h3>电源信息</h3>
+            <p>1000mAh 锂离子聚合物电池</p>
+        </div>
+        <div class="info-card">
+            <h3>存储配置</h3>
+            <p>RAM：2GB LPDDR4<br>ROM：16GB eMMC</p>
+        </div>
+        <div class="info-card">
+            <h3>系统版本</h3>
+            <p>Firmware v1.0.0<br>Build 20240320</p>
+        </div>
+    </div>
+
+    <!-- 视频管理页 -->
+    <div id="videoTab" class="video-manager">
+        <div class="file-list" id="fileList">
+            <div class="loading">加载中，请稍候...</div>
+        </div>
+
+        <div class="video-detail">
+            <video id="video-player" controls></video>
+            <div class="detail-actions">
+                <button class="btn" onclick="backToList()">返回列表</button>
+            </div>
+            
+            <div class="data-downloads">
+                <h3>数据下载</h3>
+                <div id="download-links"></div>
+            </div>
+            
+            <div id="map-container"></div>
+            
+            <div class="imu-data">
+                <h3>IMU 数据预览</h3>
+                <pre id="imu-preview"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.7.1/leaflet.min.js"></script>
+    <script>
+        // 全局状态管理
+        const AppState = {
+            currentTab: 'device',
+            mapInstance: null,
+            fileListLoaded: false,
+            currentFileData: null,
+            exampleData: {
+                video: {
+                    name: "record_20240320_143000.mkv",
+                    path: "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAABNttZGF0AAAAL...",
+                    size: 5242880,
+                    date: "2024-03-20 14:30",
+                    isExample: true,
+                    baseName: "record_20240320_143000"
+                },
+                gnss: {
+                    timestamp: "1710927000",
+                    latitude: 39.9042,
+                    longitude: 116.4074,
+                    satellites: 8,
+                    altitude: 52.3,
+                    record_time: "20240320_143000"
+                },
+                imu: "Timestamp,Roll(deg),Pitch(deg),Yaw(deg)\n1744209604.000000000,0.00,0.00,0.00\n1744209609.330381295,-1.89,-8.42,-169.35"
+            },
+            mapSources: {
+                amap: {
+                    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                    options: {
+                        subdomains: ['1', '2', '3', '4'],
+                        maxZoom: 19
+                    }
+                },
+                tencent: {
+                    url: 'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=6',
+                    options: {
+                        subdomains: ['0', '1', '2', '3'],
+                        maxZoom: 19
+                    }
+                },
+                osm: {
+                    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    options: {
+                        maxZoom: 19,
+                        attribution: '&copy; OpenStreetMap'
+                    }
+                }
+            }
+        };
+
+        // 选项卡切换
+        function showTab(tab) {
+            AppState.currentTab = tab;
+            document.getElementById('deviceTab').style.display = tab === 'device' ? 'grid' : 'none';
+            document.getElementById('videoTab').style.display = tab === 'video' ? 'block' : 'none';
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.trim() === (tab === 'device' ? '设备信息' : '视频管理'));
+            });
+
+            if(tab === 'video' && !AppState.fileListLoaded) {
+                loadVideoFiles();
+                AppState.fileListLoaded = true;
+            }
+        }
+
+        // 优化版文件加载函数
+        async function loadVideoFiles() {
+            try {
+                const fileList = document.getElementById('fileList');
+                fileList.innerHTML = '<div class="loading">加载中，请稍候...</div>';
+                
+                const startTime = performance.now();
+                // 修改请求路径为 /mnt/sdcard
+                const response = await fetch('/mnt/sdcard/');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // 精确解析表格结构，只查找mkv视频文件，匹配record_YYYYMMDD_HHMMSS.mkv格式
+                const videoRegex = /^record_\d{8}_\d{6}\.mkv$/;
+                
+                const fileItems = Array.from(doc.querySelectorAll('tr'))
+                    .slice(1)
+                    .map(tr => {
+                        const tds = tr.querySelectorAll('td');
+                        if (tds.length < 3) return null;
+                        
+                        const link = tds[0].querySelector('a');
+                        if (!link || !link.href) return null;
+
+                        const fileName = link.textContent.trim();
+                        
+                        // 只保留匹配格式的mkv文件
+                        if (!videoRegex.test(fileName)) return null;
+                        
+                        // 提取不带扩展名的基本文件名（用于后续查找关联文件）
+                        const baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+                        
+                        // 提取完整路径（解析相对路径）
+                        const path = new URL(link.href, window.location.href).pathname;
+                        
+                        return {
+                            name: fileName,
+                            path: path,
+                            size: parseInt(tds[2].textContent.replace(/[^0-9]/g, '')) || 0,
+                            date: tds[1].textContent.trim(),
+                            isExample: false,
+                            baseName: baseName
+                        };
+                    })
+                    .filter(file => file !== null);
+
+                console.log(`加载完成，找到${fileItems.length}个视频文件，耗时：${(performance.now() - startTime).toFixed(1)}ms`);
+                renderFileList(fileItems.length > 0 ? fileItems : [AppState.exampleData.video]);
+            } catch (error) {
+                console.error('文件加载失败:', error);
+                renderFileList([AppState.exampleData.video]);
+            }
+        }
+        
+        // 优化渲染性能
+        function renderFileList(files) {
+            const container = document.getElementById('fileList');
+            const fragment = document.createDocumentFragment();
+            
+            files.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                
+                // 从文件名解析日期时间
+                let displayDate = file.date;
+                const dateMatch = file.baseName.match(/record_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+                if (dateMatch) {
+                    displayDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]} ${dateMatch[4]}:${dateMatch[5]}:${dateMatch[6]}`;
+                }
+                
+                item.innerHTML = `
+                    <span>
+                        ${escapeHTML(file.name)}
+                        ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
+                    </span>
+                    <span>${escapeHTML(displayDate)}</span>
+                    <span>${formatSize(file.size)}</span>
+                `;
+                item.dataset.filePath = encodeURI(file.path);
+                item.dataset.baseName = file.baseName;
+                item.dataset.isExample = file.isExample;
+                fragment.appendChild(item);
+            });
+
+            // 使用事件委托
+            container.innerHTML = '';
+            container.appendChild(fragment);
+            container.addEventListener('click', handleFileClick);
+        }
+
+        // 文件点击处理
+        function handleFileClick(event) {
+            const item = event.target.closest('.file-item');
+            if (item) {
+                const file = {
+                    name: decodeURI(item.dataset.filePath.split('/').pop()),
+                    path: decodeURI(item.dataset.filePath),
+                    baseName: item.dataset.baseName,
+                    size: parseInt(item.children[2].textContent.match(/(\d+\.?\d*)/)[0]),
+                    date: item.children[1].textContent,
+                    isExample: item.dataset.isExample === 'true'
+                };
+                
+                AppState.currentFileData = file;
+                showVideoDetail(file);
+            }
+        }
+
+        // 显示视频详情
+        async function showVideoDetail(file) {
+            document.querySelector('.file-list').style.display = 'none';
+            document.querySelector('.video-detail').style.display = 'block';
+
+            const player = document.getElementById('video-player');
+            const downloadLinks = document.getElementById('download-links');
+            downloadLinks.innerHTML = '';
+            
+            try {
+                player.src = file.isExample ? AppState.exampleData.video.path : file.path;
+                
+                // 生成下载链接
+                if (file.isExample) {
+                    downloadLinks.innerHTML = `
+                        <span>示例文件不支持下载</span>
+                    `;
+                } else {
+                    const videoPath = file.path;
+                    const basePath = videoPath.substring(0, videoPath.lastIndexOf('/'));
+                    const baseFileName = file.baseName;
+                    
+                    const jsonPath = `${basePath}/${baseFileName.replace('record_', 'gnss_')}.json`;
+                    const csvPath = `${basePath}/${baseFileName.replace('record_', 'imu_')}.csv`;
+                    
+                    downloadLinks.innerHTML = `
+                        <a href="${videoPath}" download class="download-btn">下载视频</a>
+                        <a href="${jsonPath}" download class="download-btn">下载GNSS数据</a>
+                        <a href="${csvPath}" download class="download-btn">下载IMU数据</a>
+                    `;
+                }
+                
+                // 异步加载GPS和IMU数据
+                const [gpsData, imuPreview] = await Promise.all([
+                    loadGPSData(file),
+                    loadIMUPreview(file)
+                ]);
+                
+                // 初始化地图
+                if (gpsData) {
+                    initMap(gpsData);
+                }
+                
+                // 显示IMU数据预览
+                document.getElementById('imu-preview').textContent = imuPreview || '无法加载IMU数据';
+                
+            } catch (error) {
+                console.error('视频初始化失败:', error);
+                player.src = '';
+                alert('视频加载失败，请检查文件格式和权限');
+            }
+        }
+
+        // 加载GPS数据
+        async function loadGPSData(file) {
+            try {
+                if (file.isExample) {
+                    return AppState.exampleData.gnss;
+                }
+                
+                const basePath = file.path.substring(0, file.path.lastIndexOf('/'));
+                const jsonPath = `${basePath}/${file.baseName.replace('record_', 'gnss_')}.json`;
+                
+                const response = await fetch(jsonPath);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.warn('无法加载GNSS数据:', error);
+                
+                // 尝试从IMU CSV中提取位置信息 - 这里是简化处理，实际情况可能需要更复杂的逻辑
+                return {
+                    latitude: 39.9042,     // 默认位置 - 北京
+                    longitude: 116.4074,
+                    altitude: 50,
+                    satellites: 0,
+                    record_time: file.baseName.substring(7) // 从record_之后提取时间戳
+                };
+            }
+        }
+        
+        // 加载IMU数据预览
+        async function loadIMUPreview(file) {
+            try {
+                if (file.isExample) {
+                    return AppState.exampleData.imu;
+                }
+                
+                const basePath = file.path.substring(0, file.path.lastIndexOf('/'));
+                const csvPath = `${basePath}/${file.baseName.replace('record_', 'imu_')}.csv`;
+                
+                const response = await fetch(csvPath);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                }
+                
+                const csvText = await response.text();
+                // 只显示前10行，避免数据过多
+                const lines = csvText.split('\n').slice(0, 10);
+                return lines.join('\n') + '\n...（更多数据请下载完整CSV文件）';
+                
+            } catch (error) {
+                console.warn('无法加载IMU数据:', error);
+                return "无法加载IMU数据，请检查文件是否存在";
+            }
+        }
+
+        // 地图初始化（高德+腾讯+OSM三重备份）
+        function initMap(coords) {
+            if (!coords || !coords.latitude || !coords.longitude) {
+                console.error('无效的坐标数据');
+                document.getElementById('map-container').innerHTML = '<div class="loading">无法加载地图，坐标数据无效</div>';
+                return;
+            }
+            
+            if (AppState.mapInstance) {
+                AppState.mapInstance.remove();
+            }
+
+            AppState.mapInstance = L.map('map-container', {
+                center: [coords.latitude, coords.longitude],
+                zoom: 15
+            });
+
+            // 尝试加载不同的地图源
+            let currentSource = 'amap';
+            loadMapSource(currentSource);
+
+            function loadMapSource(source) {
+                const srcConfig = AppState.mapSources[source];
+                if (!srcConfig) return;
+                
+                const tileLayer = L.tileLayer(srcConfig.url, srcConfig.options);
+                
+                tileLayer.addTo(AppState.mapInstance);
+                tileLayer.on('tileerror', function() {
+                    AppState.mapInstance.removeLayer(tileLayer);
+                    console.warn(`${source}地图加载失败，尝试下一个源`);
+                    
+                    if (source === 'amap') {
+                        loadMapSource('tencent');
+                    } else if (source === 'tencent') {
+                        loadMapSource('osm');
+                    }
+                });
+            }
+
+            // 添加标记
+            L.marker([coords.latitude, coords.longitude])
+                .bindPopup(createPopupContent(coords))
+                .addTo(AppState.mapInstance)
+                .openPopup();
+        }
+
+        // 工具函数
+        function escapeHTML(str) {
+            return str.replace(/&/g, '&amp;')
+                     .replace(/</g, '&lt;')
+                     .replace(/>/g, '&gt;')
+                     .replace(/"/g, '&quot;')
+                     .replace(/'/g, '&#039;');
+        }
+
+        function formatSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) {
+                bytes /= 1024;
+                i++;
+            }
+            return `${bytes.toFixed(i > 0 ? 2 : 0)} ${units[i]}`;
+        }
+
+        function formatTime(timeStr) {
+            return timeStr.replace(
+                /(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/,
+                '$1-$2-$3 $4:$5:$6'
+            );
+        }
+
+        function createPopupContent(coords) {
+            return `
+                <b>记录时间:</b> ${formatTime(coords.record_time || '00000000_000000')}<br>
+                <b>坐标:</b> ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}<br>
+                <b>海拔:</b> ${coords.altitude || '未知'}m<br>
+                <b>卫星数:</b> ${coords.satellites || '未知'}
+            `;
+        }
+
+        function backToList() {
+            document.querySelector('.file-list').style.display = 'block';
+            document.querySelector('.video-detail').style.display = 'none';
+            
+            const player = document.getElementById('video-player');
+            player.pause();
+            player.src = '';
+            
+            if (AppState.mapInstance) {
+                AppState.mapInstance.remove();
+                AppState.mapInstance = null;
+            }
+        }
+
+        // 初始化
+        showTab('device');
+    </script>
+</body>
+</html>
