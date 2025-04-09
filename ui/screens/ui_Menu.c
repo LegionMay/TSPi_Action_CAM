@@ -5,17 +5,65 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #define MSG_KEY 9876
 #define GNSS_FIFO_PATH "/tmp/gnss_control_fifo"
+#define WEB_PROCESS "/app/web/civetweb -document_root /mnt/sdcard -listening_ports 8080 -enable_directory_listing yes -index_files \"\" -title \"File List\" -extra_mime_types .mkv=video/x-matroska"
 
 static int msgid;
+static pid_t web_pid = -1;
 
 // Message structure for System V
 typedef struct {
     long mtype;         // Message type (required by System V)
     char mtext[32];     // Message content
 } MsgBuf;
+
+// 启动进程函数
+static pid_t start_process(const char* command) {
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        perror("fork failed");
+        return -1;
+    } 
+    else if (pid == 0) {
+        // 子进程执行命令
+        char *args[20];
+        char cmd_copy[256];
+        strcpy(cmd_copy, command);
+        
+        // 分解命令行参数
+        int i = 0;
+        args[i] = strtok(cmd_copy, " ");
+        while (args[i] != NULL && i < 19) {
+            i++;
+            args[i] = strtok(NULL, " ");
+        }
+        
+        // 执行命令
+        execv(args[0], args);
+        
+        // 如果execv返回，说明出错了
+        perror("execv failed");
+        exit(1);
+    }
+    
+    // 父进程返回子进程PID
+    return pid;
+}
+
+// 终止进程函数
+static void stop_process(pid_t pid) {
+    if (pid > 0) {
+        // 发送SIGTERM信号终止进程
+        if (kill(pid, SIGTERM) != 0) {
+            // 如果失败，尝试SIGKILL
+            kill(pid, SIGKILL);
+        }
+    }
+}
 
 // Initialize System V message queue
 static void init_message_queue(void) {
@@ -55,6 +103,49 @@ static void gnss_switch_event_cb(lv_event_t *e) {
     } else {
         perror("Failed to open GNSS control FIFO");
         printf("Is GNSS process running? FIFO path: %s\n", GNSS_FIFO_PATH);
+    }
+}
+
+// IMU开关事件回调
+static void imu_switch_event_cb(lv_event_t *e) {
+    lv_obj_t *sw = lv_event_get_target(e);
+    int is_on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    
+    // 打开IMU控制FIFO
+    int fd = open("/tmp/imu_control_fifo", O_WRONLY | O_NONBLOCK);
+    if (fd >= 0) {
+        const char *cmd = is_on ? "start" : "stop";
+        write(fd, cmd, strlen(cmd));
+        close(fd);
+        printf("Sent IMU command: %s\n", cmd);
+    } else {
+        perror("Failed to open IMU control FIFO");
+        printf("Is IMU process running? FIFO path: /tmp/imu_control_fifo\n");
+    }
+}
+
+// Hot-point switch event callback
+static void hotpoint_switch_event_cb(lv_event_t *e) {
+    lv_obj_t *sw = lv_event_get_target(e);
+    int is_on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    
+    if (is_on) {
+        // 启动Web服务器
+        if (web_pid <= 0) {
+            web_pid = start_process(WEB_PROCESS);
+            if (web_pid > 0) {
+                printf("Started web server with PID %d\n", web_pid);
+            } else {
+                printf("Failed to start web server\n");
+            }
+        }
+    } else {
+        // 停止Web服务器
+        if (web_pid > 0) {
+            stop_process(web_pid);
+            web_pid = -1;
+            printf("Stopped web server\n");
+        }
     }
 }
 
@@ -113,6 +204,8 @@ void ui_Screen2_screen_init(void) {
     lv_obj_add_event_cb(res_dropdown, res_dropdown_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
     const char* switches[] = {"IMU Stabilization", "HOT-POINT Tracking", "GNSS Recording"};
+    lv_obj_t *switches_obj[3] = {NULL, NULL, NULL};
+    
     for (int i = 0; i < 3; i++) {
         lv_obj_t *div = lv_line_create(scroll_container);
         // 修改为 lv_point_precise_t 类型
@@ -134,9 +227,14 @@ void ui_Screen2_screen_init(void) {
         
         lv_obj_t *sw = lv_switch_create(sw_row);
         lv_obj_set_size(sw, 60, 30);
+        switches_obj[i] = sw;
         
-        // 为GNSS开关设置事件回调
-        if (i == 2) { // GNSS Recording开关
+        // 为开关设置事件回调
+        if (i == 0) { // IMU Stabilization开关
+            lv_obj_add_event_cb(sw, imu_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        } else if (i == 1) { // HOT-POINT Tracking开关
+            lv_obj_add_event_cb(sw, hotpoint_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        } else if (i == 2) { // GNSS Recording开关
             lv_obj_add_event_cb(sw, gnss_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
         }
     }

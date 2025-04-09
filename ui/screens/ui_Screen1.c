@@ -16,13 +16,23 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/msg.h>
-#include <errno.h>  // 添加此头文件以解决errno未定义的问题
+#include <errno.h>
+#include <signal.h>
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
 #define SHM_SIZE 800 * 450 * 4
 #define RECORD_SHM_KEY 5678
-#define GNSS_FIFO_PATH "/tmp/gnss_ui_fifo" // GNSS数据通信管道
+#define GNSS_FIFO_PATH "/tmp/gnss_ui_fifo"
+
+// 进程启动路径
+#define GNSS_PROCESS "/app/GNSS/gnss_collector"
+#define IMU_PROCESS "/app/imu/imu_logger"
+#define WEB_PROCESS "/app/web/civetweb -document_root /mnt/sdcard -listening_ports 8080 -enable_directory_listing yes -index_files \"\" -title \"File List\" -extra_mime_types .mkv=video/x-matroska"
+
+// 进程PID
+static pid_t gnss_pid = -1;
+static pid_t imu_pid = -1;
 
 // Semaphore pointer
 static sem_t *sem;
@@ -83,6 +93,51 @@ static void init_gnss_fifo(void) {
     }
 }
 
+// 启动进程函数
+static pid_t start_process(const char* command) {
+    pid_t pid = fork();
+    
+    if (pid < 0) {
+        perror("fork failed");
+        return -1;
+    } 
+    else if (pid == 0) {
+        // 子进程执行命令
+        char *args[20];
+        char cmd_copy[256];
+        strcpy(cmd_copy, command);
+        
+        // 分解命令行参数
+        int i = 0;
+        args[i] = strtok(cmd_copy, " ");
+        while (args[i] != NULL && i < 19) {
+            i++;
+            args[i] = strtok(NULL, " ");
+        }
+        
+        // 执行命令
+        execv(args[0], args);
+        
+        // 如果execv返回，说明出错了
+        perror("execv failed");
+        exit(1);
+    }
+    
+    // 父进程返回子进程PID
+    return pid;
+}
+
+// 终止进程函数
+static void stop_process(pid_t pid) {
+    if (pid > 0) {
+        // 发送SIGTERM信号终止进程
+        if (kill(pid, SIGTERM) != 0) {
+            // 如果失败，尝试SIGKILL
+            kill(pid, SIGKILL);
+        }
+    }
+}
+
 // Back button event callback
 static void back_btn_event_cb(lv_event_t *e) {
     lv_obj_t *back_btn = lv_event_get_target(e);
@@ -116,12 +171,30 @@ static void trigger_record_button(int start_recording) {
         record_control->is_recording = 1;
         start_time = time(NULL);
         is_recording = 1;
+        
+        // 启动GNSS和IMU进程
+        gnss_pid = start_process(GNSS_PROCESS);
+        imu_pid = start_process(IMU_PROCESS);
+        
+        if (gnss_pid > 0) {
+            printf("Started GNSS process with PID %d\n", gnss_pid);
+        }
+        if (imu_pid > 0) {
+            printf("Started IMU process with PID %d\n", imu_pid);
+        }
     } else {
         printf("Recording stopped\n");
         lv_label_set_text(record_label, LV_SYMBOL_PLAY);
         lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
         record_control->is_recording = 0;
         is_recording = 0;
+        
+        // 终止GNSS和IMU进程
+        stop_process(gnss_pid);
+        stop_process(imu_pid);
+        gnss_pid = -1;
+        imu_pid = -1;
+        printf("Stopped GNSS and IMU processes\n");
     }
 }
 
@@ -155,7 +228,7 @@ static void preview_btn_event_cb(lv_event_t *e) {
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_REG) {
             char *ext = strrchr(entry->d_name, '.');
-            if (ext && strcmp(ext, ".mkv") == 0) {
+            if (ext && (strcmp(ext, ".mkv") == 0 || strcmp(ext, ".json") == 0 || strcmp(ext, ".csv") == 0)) {
                 lv_list_add_text(list, entry->d_name);
             }
         }
