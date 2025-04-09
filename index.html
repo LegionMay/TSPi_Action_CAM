@@ -286,8 +286,8 @@
                         return {
                             name: link.textContent.trim(),
                             path: path,
-                            size: parseInt(tds[1].textContent.replace(/[^0-9]/g, '')) || 0,
-                            date: tds[2].textContent.trim(),
+                            size: parseInt(tds[2].textContent.replace(/[^0-9]/g, '')) || 0,
+                            date: tds[1].textContent.trim(),
                             isExample: false
                         };
                     })
@@ -318,8 +318,8 @@
                         ${escapeHTML(file.name)}
                         ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
                     </span>
-                    <span>${formatSize(file.size)}</span>
                     <span>${escapeHTML(file.date)}</span>
+                    <span>${formatSize(file.size)}</span>
                 `;
                 item.dataset.filePath = encodeURI(file.path);
                 fragment.appendChild(item);
@@ -337,8 +337,8 @@
                 const file = {
                     name: decodeURI(item.dataset.filePath.split('/').pop()),
                     path: decodeURI(item.dataset.filePath),
-                    size: parseInt(item.children[1].textContent.match(/(\d+\.?\d*)/)[0]),
-                    date: item.children[2].textContent,
+                    size: parseInt(item.children[2].textContent.match(/(\d+\.?\d*)/)[0]),
+                    date: item.children[1].textContent,
                     isExample: item.querySelector('.example-badge') !== null
                 };
                 showVideoDetail(file);
