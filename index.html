@@ -155,6 +155,7 @@
             margin: 20px 0;
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn {
@@ -164,6 +165,64 @@
             cursor: pointer;
             background: var(--primary-color);
             color: white;
+            text-decoration: none;
+        }
+        
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+        
+        .btn-warning {
+            background: #FF9800;
+        }
+        
+        .loading-indicator {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: var(--secondary-color);
+        }
+        
+        .alert {
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            color: white;
+        }
+        
+        .alert-info {
+            background-color: var(--primary-color);
+        }
+        
+        .alert-warning {
+            background-color: #FF9800;
+        }
+        
+        .alert-error {
+            background-color: #F44336;
+        }
+        
+        .data-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .data-section h3 {
+            margin-top: 0;
+            color: var(--secondary-color);
+        }
+        
+        .data-preview {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -200,15 +259,33 @@
 
     <!-- 视频管理页 -->
     <div id="videoTab" class="video-manager">
-        <div class="file-list" id="fileList"></div>
+        <div class="file-list" id="fileList">
+            <div class="loading-indicator">加载文件列表中...</div>
+        </div>
 
         <div class="video-detail">
-            <video id="video-player" controls></video>
+            <video id="video-player" controls playsinline></video>
+            <div id="video-error" class="alert alert-error" style="display: none;"></div>
+            
             <div class="detail-actions">
-                <a id="downloadBtn" class="btn" download>下载视频</a>
-                <button class="btn" onclick="backToList()">返回列表</button>
+                <a id="downloadVideoBtn" class="btn" download>下载视频</a>
+                <a id="downloadGnssBtn" class="btn btn-secondary" download>下载GNSS数据</a>
+                <a id="downloadImuBtn" class="btn btn-secondary" download>下载IMU数据</a>
+                <button class="btn btn-warning" onclick="backToList()">返回列表</button>
             </div>
-            <div id="map-container"></div>
+            
+            <!-- 数据预览部分 -->
+            <div class="data-section">
+                <h3>GNSS数据预览</h3>
+                <div id="gnss-info" class="alert alert-info">加载GNSS数据中...</div>
+                <div id="map-container"></div>
+            </div>
+            
+            <div class="data-section">
+                <h3>IMU数据预览</h3>
+                <div id="imu-info" class="alert alert-info">加载IMU数据中...</div>
+                <div id="imu-preview" class="data-preview"></div>
+            </div>
         </div>
     </div>
 
@@ -220,22 +297,28 @@
             currentTab: 'device',
             mapInstance: null,
             fileListLoaded: false,
+            currentFile: null,
             exampleData: {
                 video: {
-                    name: "示例视频.mp4",
+                    name: "record_20240320_143000.mkv",
                     path: "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAABNttZGF0AAAAL...",
                     size: 5242880,
                     date: "2024-03-20 14:30",
                     isExample: true
                 },
                 gnss: {
-                    timestamp: "1710927000",
-                    latitude: 39.9042,
-                    longitude: 116.4074,
-                    satellites: 8,
-                    altitude: 52.3,
-                    record_time: "20240320_143000"
-                }
+                    data: [
+                        {
+                            timestamp: "1710927000",
+                            coords: [39.9042, 116.4074],
+                            altitude: 52.3,
+                            satellites: 8,
+                            record_time: "20240320_143000",
+                            status: "active"
+                        }
+                    ]
+                },
+                imu: "Timestamp,Roll(deg),Pitch(deg),Yaw(deg)\n1744209604.000000000,0.00,0.00,0.00\n1744209609.330381295,-1.89,-8.42,-169.35"
             }
         };
 
@@ -258,8 +341,9 @@
         // 优化版文件加载函数
         async function loadVideoFiles() {
             try {
+                document.getElementById('fileList').innerHTML = '<div class="loading-indicator">加载文件列表中...</div>';
+                
                 const startTime = performance.now();
-                // 从/api/路径获取目录列表，而不是根目录
                 const response = await fetch('/');
                 
                 if (!response.ok) {
@@ -270,7 +354,9 @@
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
                 
-                // 精确解析表格结构
+                // 解析表格结构，专注于匹配record_*.mkv格式
+                const videoRegex = /^record_\d{8}_\d{6}\.mkv$/;
+                
                 const fileItems = Array.from(doc.querySelectorAll('tr'))
                     .slice(1)
                     .map(tr => {
@@ -280,28 +366,36 @@
                         const link = tds[0].querySelector('a');
                         if (!link || !link.href) return null;
 
-                        // 提取完整路径（解析相对路径）
+                        const fileName = link.textContent.trim();
+                        if (!videoRegex.test(fileName)) return null;
+                        
+                        // 提取完整路径
                         const path = new URL(link.href, window.location.href).pathname;
                         
+                        // 提取基本名称用于关联文件
+                        const baseName = fileName.replace(/\.mkv$/, '');
+                        
                         return {
-                            name: link.textContent.trim(),
+                            name: fileName,
                             path: path,
+                            baseName: baseName,
                             size: parseInt(tds[1].textContent.replace(/[^0-9]/g, '')) || 0,
                             date: tds[2].textContent.trim(),
                             isExample: false
                         };
                     })
-                    .filter(file => {
-                        return file && 
-                            /\.(mkv|mp4)$/i.test(file.name) &&
-                            file.size > 1024; // 过滤无效文件
-                    });
+                    .filter(file => file !== null);
 
-                console.log(`加载完成，耗时：${(performance.now() - startTime).toFixed(1)}ms`);
-                renderFileList(fileItems.length > 0 ? fileItems : [AppState.exampleData.video]);
+                console.log(`加载完成，找到${fileItems.length}个视频文件，耗时：${(performance.now() - startTime).toFixed(1)}ms`);
+                
+                if (fileItems.length > 0) {
+                    renderFileList(fileItems);
+                } else {
+                    document.getElementById('fileList').innerHTML = '<div class="alert alert-warning">未找到符合格式的视频文件 (record_YYYYMMDD_HHMMSS.mkv)</div>';
+                }
             } catch (error) {
                 console.error('文件加载失败:', error);
-                renderFileList([AppState.exampleData.video]);
+                document.getElementById('fileList').innerHTML = `<div class="alert alert-error">文件加载失败: ${error.message}</div>`;
             }
         }
         
@@ -313,20 +407,31 @@
             files.forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'file-item';
+                
+                // 从文件名提取日期时间并格式化
+                let displayDate = file.date;
+                const dateMatch = file.baseName.match(/record_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+                if (dateMatch) {
+                    displayDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]} ${dateMatch[4]}:${dateMatch[5]}:${dateMatch[6]}`;
+                }
+                
                 item.innerHTML = `
                     <span>
                         ${escapeHTML(file.name)}
                         ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
                     </span>
                     <span>${formatSize(file.size)}</span>
-                    <span>${escapeHTML(file.date)}</span>
+                    <span>${escapeHTML(displayDate)}</span>
                 `;
+                
                 item.dataset.filePath = encodeURI(file.path);
+                item.dataset.baseName = file.baseName;
                 fragment.appendChild(item);
             });
 
             // 使用事件委托
-            container.replaceChildren(fragment);
+            container.innerHTML = '';
+            container.appendChild(fragment);
             container.addEventListener('click', handleFileClick);
         }
 
@@ -334,13 +439,20 @@
         function handleFileClick(event) {
             const item = event.target.closest('.file-item');
             if (item) {
+                const filePath = decodeURI(item.dataset.filePath);
+                const fileName = filePath.split('/').pop();
+                const baseName = item.dataset.baseName;
+                
                 const file = {
-                    name: decodeURI(item.dataset.filePath.split('/').pop()),
-                    path: decodeURI(item.dataset.filePath),
+                    name: fileName,
+                    path: filePath,
+                    baseName: baseName,
                     size: parseInt(item.children[1].textContent.match(/(\d+\.?\d*)/)[0]),
                     date: item.children[2].textContent,
-                    isExample: item.querySelector('.example-badge') !== null
+                    isExample: false
                 };
+                
+                AppState.currentFile = file;
                 showVideoDetail(file);
             }
         }
@@ -349,81 +461,261 @@
         async function showVideoDetail(file) {
             document.querySelector('.file-list').style.display = 'none';
             document.querySelector('.video-detail').style.display = 'block';
+            
+            const videoPlayer = document.getElementById('video-player');
+            const videoError = document.getElementById('video-error');
+            const gnssInfo = document.getElementById('gnss-info');
+            const imuInfo = document.getElementById('imu-info');
+            const imuPreview = document.getElementById('imu-preview');
+            
+            // 重置显示
+            videoError.style.display = 'none';
+            videoPlayer.style.display = 'block';
+            gnssInfo.textContent = '加载GNSS数据中...';
+            imuInfo.textContent = '加载IMU数据中...';
+            imuPreview.textContent = '';
 
-            const player = document.getElementById('video-player');
             try {
-                player.src = file.isExample ? AppState.exampleData.video.path : file.path;
-                await player.play().catch(() => {}); // 自动播放处理
+                // 设置视频源
+                videoPlayer.src = file.path;
                 
-                // 异步加载地图
-                const coords = await loadGPSData(
-                    file.name.replace(/\.[^.]+$/, '') + '.json'
-                );
-                initMap(coords);
+                // 添加视频错误处理
+                videoPlayer.onerror = function() {
+                    console.error(`视频加载错误: ${videoPlayer.error.code}: ${videoPlayer.error.message}`);
+                    videoError.textContent = `视频无法播放: ${getVideoErrorMessage(videoPlayer.error.code)}`;
+                    videoError.style.display = 'block';
+                    videoPlayer.style.display = 'none';
+                };
+                
+                // 准备下载按钮
+                prepareDownloadButtons(file);
+                
+                // 异步加载GNSS和IMU数据
+                loadGNSSData(file)
+                    .then(gnssData => {
+                        if (gnssData && gnssData.data && gnssData.data.length > 0) {
+                            const lastEntry = gnssData.data[gnssData.data.length - 1];
+                            gnssInfo.textContent = `GNSS坐标: ${lastEntry.coords[0].toFixed(6)}, ${lastEntry.coords[1].toFixed(6)} | 卫星数: ${lastEntry.satellites} | 海拔: ${lastEntry.altitude}米`;
+                            
+                            // 初始化地图
+                            initMap({
+                                latitude: lastEntry.coords[0],
+                                longitude: lastEntry.coords[1],
+                                satellites: lastEntry.satellites,
+                                altitude: lastEntry.altitude,
+                                record_time: lastEntry.record_time || file.baseName.replace('record_', '')
+                            });
+                        } else {
+                            throw new Error('GNSS数据格式无效或为空');
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('GNSS数据加载失败:', err);
+                        gnssInfo.textContent = '未能加载GNSS数据，使用默认坐标';
+                        
+                        // 使用默认坐标
+                        initMap({
+                            latitude: 36.2048,   // 泰山默认坐标
+                            longitude: 117.1234,
+                            satellites: 0,
+                            altitude: 0,
+                            record_time: file.baseName.replace('record_', '')
+                        });
+                    });
+                
+                loadIMUData(file)
+                    .then(imuData => {
+                        if (imuData) {
+                            const lines = imuData.split('\n');
+                            if (lines.length > 1) {
+                                // 计算IMU数据简单统计
+                                const dataLines = lines.slice(1); // 跳过标题行
+                                const count = dataLines.length;
+                                
+                                imuInfo.textContent = `IMU数据: ${count}条记录`;
+                                
+                                // 显示前10行
+                                const previewLines = lines.slice(0, 10);
+                                imuPreview.textContent = previewLines.join('\n') + (lines.length > 10 ? '\n...' : '');
+                            } else {
+                                imuInfo.textContent = 'IMU数据格式无效或为空';
+                            }
+                        } else {
+                            throw new Error('IMU数据为空');
+                        }
+                    })
+                    .catch(err => {
+                        console.warn('IMU数据加载失败:', err);
+                        imuInfo.textContent = '未能加载IMU数据';
+                        imuPreview.textContent = '数据不可用';
+                    });
+                
             } catch (error) {
                 console.error('视频初始化失败:', error);
-                player.src = '';
-                alert('视频加载失败，请检查文件格式和权限');
+                videoError.textContent = `视频加载失败: ${error.message}`;
+                videoError.style.display = 'block';
+                videoPlayer.style.display = 'none';
             }
-
-            // 下载按钮处理
-            const downloadBtn = document.getElementById('downloadBtn');
+        }
+        
+        // 准备下载按钮
+        function prepareDownloadButtons(file) {
+            const basePath = file.path.substring(0, file.path.lastIndexOf('/') + 1);
+            const gnssPath = `${basePath}gnss_${file.baseName.substring(7)}.json`;
+            const imuPath = `${basePath}imu_${file.baseName.substring(7)}.csv`;
+            
+            // 设置下载按钮
+            document.getElementById('downloadVideoBtn').href = file.path;
+            document.getElementById('downloadVideoBtn').download = file.name;
+            
+            document.getElementById('downloadGnssBtn').href = gnssPath;
+            document.getElementById('downloadGnssBtn').download = gnssPath.split('/').pop();
+            
+            document.getElementById('downloadImuBtn').href = imuPath;
+            document.getElementById('downloadImuBtn').download = imuPath.split('/').pop();
+            
+            console.log('设置下载路径:', {video: file.path, gnss: gnssPath, imu: imuPath});
+        }
+        
+        // 加载GNSS数据
+        async function loadGNSSData(file) {
             if (file.isExample) {
-                downloadBtn.href = "#";
-                downloadBtn.onclick = () => alert('示例文件不支持下载');
-            } else {
-                downloadBtn.href = file.path;
-                downloadBtn.download = file.name;
-                downloadBtn.onclick = null;
+                return AppState.exampleData.gnss;
+            }
+            
+            const basePath = file.path.substring(0, file.path.lastIndexOf('/') + 1);
+            const gnssPath = `${basePath}gnss_${file.baseName.substring(7)}.json`;
+            
+            console.log('尝试加载GNSS数据:', gnssPath);
+            
+            try {
+                const response = await fetch(gnssPath);
+                if (!response.ok) {
+                    throw new Error(`加载GNSS数据失败: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('GNSS数据获取失败:', error);
+                throw error;
+            }
+        }
+        
+        // 加载IMU数据
+        async function loadIMUData(file) {
+            if (file.isExample) {
+                return AppState.exampleData.imu;
+            }
+            
+            const basePath = file.path.substring(0, file.path.lastIndexOf('/') + 1);
+            const imuPath = `${basePath}imu_${file.baseName.substring(7)}.csv`;
+            
+            console.log('尝试加载IMU数据:', imuPath);
+            
+            try {
+                const response = await fetch(imuPath);
+                if (!response.ok) {
+                    throw new Error(`加载IMU数据失败: ${response.status}`);
+                }
+                return await response.text();
+            } catch (error) {
+                console.error('IMU数据获取失败:', error);
+                throw error;
             }
         }
 
-        // 地图初始化（高德+腾讯双方案）
+        // 地图初始化（多地图源+错误处理）
         function initMap(coords) {
+            console.log('初始化地图，坐标:', coords);
+            
             if (AppState.mapInstance) {
                 AppState.mapInstance.remove();
+                AppState.mapInstance = null;
             }
 
-            AppState.mapInstance = L.map('map-container', {
-                center: [coords.latitude, coords.longitude],
-                zoom: 15,
-                attributionControl: false
-            });
+            try {
+                AppState.mapInstance = L.map('map-container', {
+                    center: [coords.latitude, coords.longitude],
+                    zoom: 13,
+                    attributionControl: false
+                });
 
-            // 高德地图层
-            const amapLayer = L.tileLayer(
-                'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-                    subdomains: ['1', '2', '3', '4'],
-                    maxZoom: 19,
-                    tileSize: 256,
-                    detectRetina: true
-                }
-            );
+                // 定义多个地图源
+                const mapSources = {
+                    // 高德地图
+                    amap: L.tileLayer(
+                        'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                            subdomains: ['1', '2', '3', '4'],
+                            maxZoom: 19,
+                            tileSize: 256,
+                            detectRetina: true
+                        }
+                    ),
+                    // 腾讯地图
+                    tencent: L.tileLayer(
+                        'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=6', {
+                            subdomains: ['0', '1', '2', '3'],
+                            maxZoom: 19
+                        }
+                    ),
+                    // OpenStreetMap备选
+                    osm: L.tileLayer(
+                        'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            subdomains: 'abc',
+                            maxZoom: 19,
+                            attribution: '&copy; OpenStreetMap'
+                        }
+                    )
+                };
 
-            // 腾讯备用层
-            const tencentLayer = L.tileLayer(
-                'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=6', {
-                    subdomains: ['0', '1', '2', '3'],
-                    maxZoom: 19
-                }
-            );
+                // 首先尝试高德地图
+                mapSources.amap.addTo(AppState.mapInstance);
+                
+                // 地图加载失败时自动切换源
+                mapSources.amap.on('tileerror', function() {
+                    console.warn('高德地图加载失败，切换到腾讯地图');
+                    AppState.mapInstance.removeLayer(mapSources.amap);
+                    
+                    mapSources.tencent.addTo(AppState.mapInstance);
+                    mapSources.tencent.on('tileerror', function() {
+                        console.warn('腾讯地图加载失败，切换到OpenStreetMap');
+                        AppState.mapInstance.removeLayer(mapSources.tencent);
+                        mapSources.osm.addTo(AppState.mapInstance);
+                    });
+                });
 
-            // 自动切换逻辑
-            amapLayer.addTo(AppState.mapInstance).on('tileerror', () => {
-                amapLayer.remove();
-                tencentLayer.addTo(AppState.mapInstance);
-                console.warn('已切换备用地图源');
-            });
+                // 添加标记点
+                L.marker([coords.latitude, coords.longitude])
+                    .bindPopup(createPopupContent(coords))
+                    .addTo(AppState.mapInstance)
+                    .openPopup();
+                
+            } catch (error) {
+                console.error('地图初始化失败:', error);
+                document.getElementById('map-container').innerHTML = 
+                    `<div class="alert alert-error">地图加载失败: ${error.message}</div>`;
+            }
+        }
 
-            // 标记点
-            L.marker([coords.latitude, coords.longitude])
-                .bindPopup(createPopupContent(coords))
-                .addTo(AppState.mapInstance);
+        // 获取视频错误信息
+        function getVideoErrorMessage(code) {
+            switch (code) {
+                case MediaError.MEDIA_ERR_ABORTED: 
+                    return '播放中断';
+                case MediaError.MEDIA_ERR_NETWORK: 
+                    return '网络错误';
+                case MediaError.MEDIA_ERR_DECODE: 
+                    return '解码错误，视频格式可能不受支持';
+                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: 
+                    return '视频格式不受支持';
+                default: 
+                    return '未知错误';
+            }
         }
 
         // 工具函数
         function escapeHTML(str) {
-            return str.replace(/&/g, '&amp;')
+            if (!str) return '';
+            return str.toString().replace(/&/g, '&amp;')
                      .replace(/</g, '&lt;')
                      .replace(/>/g, '&gt;')
                      .replace(/"/g, '&quot;')
@@ -441,10 +733,13 @@
         }
 
         function formatTime(timeStr) {
-            return timeStr.replace(
-                /(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/,
-                '$1-$2-$3 $4:$5:$6'
-            );
+            if (!timeStr) return '未知时间';
+            
+            const match = timeStr.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+            if (match) {
+                return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+            }
+            return timeStr;
         }
 
         function createPopupContent(coords) {
@@ -452,13 +747,21 @@
                 <b>记录时间:</b> ${formatTime(coords.record_time)}<br>
                 <b>坐标:</b> ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}<br>
                 <b>海拔:</b> ${coords.altitude}m<br>
-                <b>卫星数:</b> ${coords.satellites}
+                <b>卫星数:</b> ${coords.satellites || 0}
             `;
         }
 
         function backToList() {
+            // 停止当前视频
+            const videoPlayer = document.getElementById('video-player');
+            videoPlayer.pause();
+            videoPlayer.removeAttribute('src');
+            videoPlayer.load();
+            
             document.querySelector('.file-list').style.display = 'block';
             document.querySelector('.video-detail').style.display = 'none';
+            
+            // 清理地图
             if (AppState.mapInstance) {
                 AppState.mapInstance.remove();
                 AppState.mapInstance = null;
