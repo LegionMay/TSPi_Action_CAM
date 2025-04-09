@@ -27,13 +27,89 @@ char* format_time(time_t time_value) {
     return buffer;
 }
 
-// GNSS数据读取线程
+// 修改GNSS初始化和数据收集函数
+
 void* gnss_reading_thread(void* arg) {
     GnssControl* control = (GnssControl*)arg;
     int serial_fd;
     char buffer[BUFFER_SIZE];
+    GnssData gnss_data;
     time_t last_record_time = 0;
+    char json_filename[256];
+    FILE *json_file = NULL;
+    int is_first_entry = 1;
     
+    // 确保目录存在
+    system("mkdir -p /mnt/sdcard");
+    
+    // 初始化默认GNSS数据
+    memset(&gnss_data, 0, sizeof(GnssData));
+    strcpy(gnss_data.timestamp, "UNKNOWN");
+    gnss_data.latitude = 0.0;
+    gnss_data.longitude = 0.0;
+    gnss_data.altitude = 0.0;
+    gnss_data.satellites = 0;
+    gnss_data.record_time = time(NULL);
+    
+    // 创建初始JSON文件
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    snprintf(json_filename, sizeof(json_filename), "/mnt/sdcard/gnss_%04d%02d%02d_%02d%02d%02d.json",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, 
+             t->tm_hour, t->tm_min, t->tm_sec);
+    
+    // 立即写入一个有效的JSON结构，即使没有数据
+    json_file = fopen(json_filename, "w");
+    if (json_file) {
+        fprintf(json_file, "[\n");
+        // 立即写入一条初始记录，确保文件不为空
+        fprintf(json_file, 
+                "  {\n"
+                "    \"timestamp\": \"%s\",\n"
+                "    \"coords\": [%.6f, %.6f],\n"
+                "    \"altitude\": %.1f,\n"
+                "    \"satellites\": %d,\n"
+                "    \"record_time\": \"%s\",\n"
+                "    \"status\": \"initial\"\n"
+                "  }\n",
+                gnss_data.timestamp,
+                gnss_data.latitude, gnss_data.longitude,
+                gnss_data.altitude,
+                gnss_data.satellites,
+                format_time(gnss_data.record_time));
+        fclose(json_file);
+        printf("Created GNSS JSON file with initial data: %s\n", json_filename);
+        is_first_entry = 0;
+    } else {
+        perror("Failed to create GNSS JSON file");
+        // 尝试在/tmp创建文件
+        snprintf(json_filename, sizeof(json_filename), "/tmp/gnss_%04d%02d%02d_%02d%02d%02d.json",
+                t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, 
+                t->tm_hour, t->tm_min, t->tm_sec);
+        json_file = fopen(json_filename, "w");
+        if (json_file) {
+            fprintf(json_file, "[\n");
+            fprintf(json_file, 
+                    "  {\n"
+                    "    \"timestamp\": \"%s\",\n"
+                    "    \"coords\": [%.6f, %.6f],\n"
+                    "    \"altitude\": %.1f,\n"
+                    "    \"satellites\": %d,\n"
+                    "    \"record_time\": \"%s\",\n"
+                    "    \"status\": \"initial\"\n"
+                    "  }\n",
+                    gnss_data.timestamp,
+                    gnss_data.latitude, gnss_data.longitude,
+                    gnss_data.altitude,
+                    gnss_data.satellites,
+                    format_time(gnss_data.record_time));
+            fclose(json_file);
+            printf("Created fallback GNSS JSON file: %s\n", json_filename);
+            is_first_entry = 0;
+        }
+    }
+    
+    // 主循环开始
     while (1) {
         // 检查是否应该运行
         if (!is_gnss_running(control)) {
@@ -45,15 +121,42 @@ void* gnss_reading_thread(void* arg) {
         serial_fd = open(SERIAL_PORT, O_RDONLY | O_NOCTTY);
         if (serial_fd < 0) {
             perror("Failed to open serial port");
+            
+            // 直接记录一条没有数据的记录
+            now = time(NULL);
+            if (difftime(now, last_record_time) >= 10) {
+                json_file = fopen(json_filename, "a");
+                if (json_file) {
+                    fprintf(json_file, ",\n");
+                    fprintf(json_file, 
+                            "  {\n"
+                            "    \"timestamp\": \"NO_DEVICE\",\n"
+                            "    \"coords\": [0.0, 0.0],\n"
+                            "    \"altitude\": 0.0,\n"
+                            "    \"satellites\": 0,\n"
+                            "    \"record_time\": \"%s\",\n"
+                            "    \"status\": \"no_device\"\n"
+                            "  }",
+                            format_time(now));
+                    fclose(json_file);
+                    last_record_time = now;
+                    
+                    // 发送卫星数到UI
+                    int fifo_fd = open(UI_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+                    if (fifo_fd >= 0) {
+                        write(fifo_fd, "0", 1);
+                        close(fifo_fd);
+                    }
+                    printf("GNSS: Wrote no-device record\n");
+                }
+            }
+            
             sleep(5);
             continue;
         }
         
         printf("GNSS data collection started\n");
-        
-        // 记录开始时间，用于计算下一次记录时间
-        time_t now = time(NULL);
-        last_record_time = now;
+        last_record_time = time(NULL) - 15; // 确保第一次运行就记录数据
         
         // 当运行标志为1时，持续读取数据
         while (is_gnss_running(control)) {
@@ -62,31 +165,101 @@ void* gnss_reading_thread(void* arg) {
                 buffer[bytes_read] = '\0';
                 
                 // 解析NMEA数据
-                GnssData temp_data;
-                if (parse_nmea(buffer, &temp_data)) {
-                    // 获取当前时间
+                if (parse_nmea(buffer, &gnss_data)) {
                     now = time(NULL);
-                    temp_data.record_time = now;
-                    
-                    // 更新全局GNSS数据
-                    pthread_mutex_lock(&data_mutex);
-                    memcpy(&current_gnss_data, &temp_data, sizeof(GnssData));
-                    pthread_mutex_unlock(&data_mutex);
+                    gnss_data.record_time = now;
                     
                     // 检查是否达到记录间隔（10秒）
-                    if (difftime(now, last_record_time) >= RECORD_INTERVAL) {
-                        // 保存为JSON
-                        save_to_json(&temp_data, JSON_PATH);
-                        last_record_time = now;
+                    if (difftime(now, last_record_time) >= 10) {
+                        // 追加到JSON文件
+                        json_file = fopen(json_filename, "a");
+                        if (json_file) {
+                            if (!is_first_entry) {
+                                fprintf(json_file, ",\n");
+                            } else {
+                                is_first_entry = 0;
+                            }
+                            
+                            fprintf(json_file, 
+                                    "  {\n"
+                                    "    \"timestamp\": \"%s\",\n"
+                                    "    \"coords\": [%.6f, %.6f],\n"
+                                    "    \"altitude\": %.1f,\n"
+                                    "    \"satellites\": %d,\n"
+                                    "    \"record_time\": \"%s\",\n"
+                                    "    \"status\": \"active\"\n"
+                                    "  }",
+                                    gnss_data.timestamp,
+                                    gnss_data.latitude, gnss_data.longitude,
+                                    gnss_data.altitude,
+                                    gnss_data.satellites,
+                                    format_time(gnss_data.record_time));
+                            fclose(json_file);
+                            last_record_time = now;
+                            
+                            printf("GNSS data recorded: %d satellites\n", gnss_data.satellites);
+                            
+                            // 发送卫星数到UI
+                            int fifo_fd = open(UI_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+                            if (fifo_fd >= 0) {
+                                char sat_str[16];
+                                snprintf(sat_str, sizeof(sat_str), "%d", gnss_data.satellites);
+                                write(fifo_fd, sat_str, strlen(sat_str));
+                                close(fifo_fd);
+                            }
+                        } else {
+                            perror("Failed to open GNSS JSON file for appending");
+                        }
                     }
                 }
+            } else if (bytes_read < 0) {
+                perror("Error reading from serial port");
             }
             
-            // 短暂休眠以降低CPU使用率
             usleep(500000);  // 0.5秒
         }
         
         close(serial_fd);
+        
+        // 正确完成JSON文件
+        json_file = fopen(json_filename, "a");
+        if (json_file) {
+            fprintf(json_file, "\n]\n"); // 结束JSON数组
+            fclose(json_file);
+            printf("GNSS JSON file closed properly\n");
+            
+            // 为下一次启动准备新文件名和标志
+            is_first_entry = 1;
+            
+            now = time(NULL);
+            t = localtime(&now);
+            snprintf(json_filename, sizeof(json_filename), "/mnt/sdcard/gnss_%04d%02d%02d_%02d%02d%02d.json",
+                     t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, 
+                     t->tm_hour, t->tm_min, t->tm_sec);
+            
+            // 创建新文件并添加初始记录
+            json_file = fopen(json_filename, "w");
+            if (json_file) {
+                fprintf(json_file, "[\n");
+                fprintf(json_file, 
+                        "  {\n"
+                        "    \"timestamp\": \"%s\",\n"
+                        "    \"coords\": [%.6f, %.6f],\n"
+                        "    \"altitude\": %.1f,\n"
+                        "    \"satellites\": %d,\n"
+                        "    \"record_time\": \"%s\",\n"
+                        "    \"status\": \"initial\"\n"
+                        "  }\n",
+                        gnss_data.timestamp,
+                        gnss_data.latitude, gnss_data.longitude,
+                        gnss_data.altitude,
+                        gnss_data.satellites,
+                        format_time(gnss_data.record_time));
+                fclose(json_file);
+                is_first_entry = 0;
+            }
+        }
+        
         printf("GNSS data collection stopped\n");
     }
     

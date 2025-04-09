@@ -2,7 +2,6 @@
  * @Author: LegionMay
  * @FilePath: /TSPi_Action/IMU/src/imu_logger.h
  */
-/* ---------- src/imu_logger.h ---------- */
 #ifndef IMU_LOGGER_H
 #define IMU_LOGGER_H
 
@@ -12,7 +11,7 @@
 #include "i2c_utils.h" 
 
 #define MSG_KEY 0x1234      // 消息队列键值
-#define BUFFER_SIZE 128     // 环形缓冲区大小
+#define BUFFER_SIZE 1024     // 环形缓冲区大小
 #define MAX_MSG_SIZE 64     // 最大消息大小
 
 // System V消息结构体
@@ -56,9 +55,12 @@ int create_msg_queue(void);
 void send_to_msg_queue(int msqid, const imu_msg *msg);
 void* sensor_read_thread(void *arg);
 void* logging_thread(void *arg);
-// 在头文件中添加函数声明
+void* command_listener_thread(void *arg);
 int read_mpu6500_data(imu_raw_data *data);
 int read_ak8963_data(imu_raw_data *data);
 void complementary_filter(const imu_raw_data *raw, fused_data *out);
+void write_to_csv(const fused_data *data);
+void close_csv_file(void);
+void create_csv_file(void);
 
 #endif

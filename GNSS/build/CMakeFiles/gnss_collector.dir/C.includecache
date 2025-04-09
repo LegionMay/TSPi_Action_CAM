@@ -32,17 +32,3 @@ pthread.h
 time.h
 -
 
-/app/GNSS/src/main.c
-stdio.h
--
-stdlib.h
--
-pthread.h
--
-unistd.h
--
-signal.h
--
-gnss_reader.h
-/app/GNSS/src/gnss_reader.h
-
