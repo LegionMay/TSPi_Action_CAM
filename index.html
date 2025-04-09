@@ -255,11 +255,12 @@
             }
         }
 
-        // 增强版文件加载
+        // 优化版文件加载函数
         async function loadVideoFiles() {
             try {
                 const startTime = performance.now();
-                const response = await fetch('/');
+                // 修改请求路径为 /mnt/sdcard
+                const response = await fetch('/mnt/sdcard/');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -279,9 +280,12 @@
                         const link = tds[0].querySelector('a');
                         if (!link || !link.href) return null;
 
+                        // 提取完整路径（解析相对路径）
+                        const path = new URL(link.href, window.location.href).pathname;
+                        
                         return {
                             name: link.textContent.trim(),
-                            path: new URL(link.href, location.href).pathname,
+                            path: path,
                             size: parseInt(tds[1].textContent.replace(/[^0-9]/g, '')) || 0,
                             date: tds[2].textContent.trim(),
                             isExample: false
@@ -289,8 +293,8 @@
                     })
                     .filter(file => {
                         return file && 
-                               /\.(mkv|mp4)$/i.test(file.name) &&
-                               file.size > 1024; // 过滤无效文件
+                            /\.(mkv|mp4)$/i.test(file.name) &&
+                            file.size > 1024; // 过滤无效文件
                     });
 
                 console.log(`加载完成，耗时：${(performance.now() - startTime).toFixed(1)}ms`);
@@ -300,7 +304,7 @@
                 renderFileList([AppState.exampleData.video]);
             }
         }
-
+        
         // 优化渲染性能
         function renderFileList(files) {
             const container = document.getElementById('fileList');
@@ -465,4 +469,4 @@
         showTab('device');
     </script>
 </body>
-</html>
+</html>    
