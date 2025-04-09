@@ -16,21 +16,16 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/msg.h>
+#include <errno.h>  // 添加此头文件以解决errno未定义的问题
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
 #define SHM_SIZE 800 * 450 * 4
 #define RECORD_SHM_KEY 5678
-#define MSG_KEY 9876
-
-// Command file path for triggering recording via command line
-#define RECORD_CMD_FILE "/tmp/record_cmd"
+#define GNSS_FIFO_PATH "/tmp/gnss_ui_fifo" // GNSS数据通信管道
 
 // Semaphore pointer
 static sem_t *sem;
-
-// System V message queue ID
-static int msgid;
 
 // Shared memory structure for recording control
 typedef struct {
@@ -38,12 +33,6 @@ typedef struct {
 } RecordControl;
 
 static RecordControl *record_control = NULL;
-
-// Message structure for System V
-typedef struct {
-    long mtype;         // Message type (required by System V)
-    char mtext[32];     // Message content
-} MsgBuf;
 
 // Image descriptor for LVGL
 static lv_image_dsc_t video_img_dsc = {
@@ -53,7 +42,7 @@ static lv_image_dsc_t video_img_dsc = {
         .w = 450,
         .h = 800,
     },
-    .data_size = SHM_SIZE,
+    .data_size = 800 * 450 * 4,
     .data = NULL,
 };
 
@@ -81,12 +70,16 @@ static void init_record_control(void) {
     record_control->is_recording = 0;
 }
 
-// Initialize System V message queue
-static void init_message_queue(void) {
-    msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
-    if (msgid == -1) {
-        perror("msgget failed in UI process");
-        exit(1);
+// Initialize GNSS FIFO for reading
+static void init_gnss_fifo(void) {
+    // 确保FIFO存在
+    if (access(GNSS_FIFO_PATH, F_OK) != 0) {
+        // 如果不存在则创建
+        if (mkfifo(GNSS_FIFO_PATH, 0666) < 0) {
+            perror("Failed to create GNSS UI FIFO");
+        } else {
+            printf("Created GNSS UI FIFO: %s\n", GNSS_FIFO_PATH);
+        }
     }
 }
 
@@ -116,15 +109,11 @@ static void trigger_record_button(int start_recording) {
         return;
     }
     
-    MsgBuf msg;
-    msg.mtype = 1;  // Use type 1 for all messages
-    
     if (start_recording) {
         printf("Recording started\n");
         lv_label_set_text(record_label, LV_SYMBOL_STOP);
         lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
         record_control->is_recording = 1;
-        snprintf(msg.mtext, sizeof(msg.mtext), "record %d", 1);
         start_time = time(NULL);
         is_recording = 1;
     } else {
@@ -132,12 +121,7 @@ static void trigger_record_button(int start_recording) {
         lv_label_set_text(record_label, LV_SYMBOL_PLAY);
         lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
         record_control->is_recording = 0;
-        snprintf(msg.mtext, sizeof(msg.mtext), "record %d", 0);
         is_recording = 0;
-    }
-    
-    if (msgsnd(msgid, &msg, sizeof(msg.mtext), 0) == -1) {
-        perror("msgsnd failed for record control");
     }
 }
 
@@ -145,32 +129,6 @@ static void trigger_record_button(int start_recording) {
 static void record_btn_event_cb(lv_event_t *e) {
     // Toggle recording state
     trigger_record_button(!is_recording);
-}
-
-// Check for command file to start/stop recording
-static void check_command_file(lv_timer_t *timer) {
-    FILE *cmd_file = fopen(RECORD_CMD_FILE, "r");
-    if (cmd_file) {
-        char cmd[32] = {0};
-        if (fgets(cmd, sizeof(cmd), cmd_file)) {
-            // Remove newline if present
-            cmd[strcspn(cmd, "\n")] = 0;
-            
-            if (strcmp(cmd, "start") == 0) {
-                printf("Command received to start recording\n");
-                trigger_record_button(1);
-            } else if (strcmp(cmd, "stop") == 0) {
-                printf("Command received to stop recording\n");
-                trigger_record_button(0);
-            } else {
-                printf("Unknown command: %s\n", cmd);
-            }
-        }
-        fclose(cmd_file);
-        
-        // Delete the command file after processing
-        remove(RECORD_CMD_FILE);
-    }
 }
 
 // Preview button event callback
@@ -247,6 +205,39 @@ static void update_video_preview(lv_timer_t *timer) {
     sem_post(sem);
 }
 
+// Update GNSS data from FIFO
+static void update_gnss_data(lv_timer_t *timer) {
+    lv_obj_t *gnss_label = (lv_obj_t *)lv_timer_get_user_data(timer);
+    
+    int fd = open(GNSS_FIFO_PATH, O_RDONLY | O_NONBLOCK);
+    if (fd >= 0) {
+        char buffer[32] = {0};
+        ssize_t bytes_read = read(fd, buffer, sizeof(buffer) - 1);
+        close(fd);
+        
+        if (bytes_read > 0) {
+            buffer[bytes_read] = '\0';
+            int satellites = atoi(buffer);
+            
+            // 更新卫星数量显示
+            lv_label_set_text(gnss_label, buffer);
+            
+            // 根据卫星数量设置不同颜色
+            if (satellites > 5) {
+                lv_obj_set_style_text_color(gnss_label, lv_color_hex(0x00FF00), 0); // 绿色
+            } else if (satellites > 0) {
+                lv_obj_set_style_text_color(gnss_label, lv_color_hex(0xFFFF00), 0); // 黄色
+            } else {
+                lv_obj_set_style_text_color(gnss_label, lv_color_hex(0xCCCCCC), 0); // 灰色
+            }
+            
+            printf("GNSS update: %s satellites\n", buffer);
+        }
+    } else if (errno != ENXIO) { // 忽略"没有进程在写入"的错误
+        perror("Failed to open GNSS FIFO for reading");
+    }
+}
+
 // Update recording time
 static lv_obj_t *record_time_label;
 static void update_record_time(lv_timer_t *timer) {
@@ -267,6 +258,8 @@ static void custom_sd_display(lv_obj_t *label, uint8_t percent) {
     lv_label_set_text_fmt(label, "%d%%", percent);
     lv_obj_set_style_text_color(label, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    
+    // Display red if over 90%
     if (percent > 90) {
         lv_obj_set_style_text_color(label, lv_color_hex(0xFF0000), 0);
     }
@@ -277,15 +270,18 @@ void ui_Screen1_screen_init(void) {
     const int32_t hor_res = 480;
     const int32_t ver_res = 800;
 
+    // Initialize semaphore and record control before LVGL setup
     init_semaphore();
     init_record_control();
-    init_message_queue();
+    init_gnss_fifo();  // 添加GNSS FIFO初始化
 
+    // Create main container
     ui_Screen1 = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(ui_Screen1, hor_res, ver_res);
     lv_obj_set_style_bg_color(ui_Screen1, lv_color_hex(0x000000), 0);
 
+    // Top status bar
     lv_obj_t *status_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(status_bar);
     lv_obj_set_size(status_bar, hor_res, 35);
@@ -294,25 +290,30 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_flex_align(status_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, 
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
+    // SD card status container
     lv_obj_t *sd_container = lv_obj_create(status_bar);
     lv_obj_remove_style_all(sd_container);
     lv_obj_set_flex_flow(sd_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(sd_container, LV_FLEX_ALIGN_CENTER, 
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
+    // SD card icon
     lv_obj_t *sd_icon = lv_label_create(sd_container);
     lv_label_set_text(sd_icon, LV_SYMBOL_SD_CARD);
     lv_obj_set_style_text_color(sd_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(sd_icon, &lv_font_montserrat_16, 0);
     
+    // Initialize SD card status module
     sd_status_init(sd_container);
     sd_set_display_callback(custom_sd_display);
 
+    // Recording mode label
     lv_obj_t *rec_mode = lv_label_create(status_bar);
     lv_label_set_text(rec_mode, "1080P30");
     lv_obj_set_style_text_color(rec_mode, lv_color_white(), 0);
     lv_obj_set_style_text_font(rec_mode, &lv_font_montserrat_16, 0);
 
+    // GNSS satellite info
     lv_obj_t *gnss_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(gnss_info);
     lv_obj_set_flex_flow(gnss_info, LV_FLEX_FLOW_ROW);
@@ -330,6 +331,7 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_font(gnss_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_pad_left(gnss_label, 5, 0);
 
+    // Battery info
     lv_obj_t *battery_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(battery_info);
     lv_obj_set_flex_flow(battery_info, LV_FLEX_FLOW_ROW);
@@ -347,17 +349,20 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_font(bat_icon, &lv_font_montserrat_16, 0);
     lv_obj_set_style_pad_left(bat_icon, 8, 0);
 
+    // Video preview container
     lv_obj_t *video_container = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(video_container);
     lv_obj_set_size(video_container, hor_res, ver_res - 100);
     lv_obj_align(video_container, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_set_style_bg_color(video_container, lv_color_hex(0x222222), 0);
 
+    // Video preview area
     lv_obj_t *video_area = lv_image_create(video_container);
     lv_obj_set_size(video_area, 450, 800);
     lv_obj_center(video_area);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x333333), 0);
 
+    // Bottom control bar
     lv_obj_t *bottom_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(bottom_bar);
     lv_obj_set_size(bottom_bar, hor_res, 70);
@@ -367,6 +372,7 @@ void ui_Screen1_screen_init(void) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(bottom_bar, 20, 0);
 
+    // Preview button
     lv_obj_t *preview_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(preview_btn, 50, 50);
     lv_obj_set_style_radius(preview_btn, 25, 0);
@@ -378,11 +384,8 @@ void ui_Screen1_screen_init(void) {
     lv_obj_center(preview_icon);
     lv_obj_set_style_text_color(preview_icon, lv_color_white(), 0);
 
+    // Record button
     record_btn = lv_button_create(ui_Screen1);
-    if (!record_btn) {
-        printf("Failed to create record_btn\n");
-        return;
-    }
     lv_obj_set_size(record_btn, 80, 80);
     lv_obj_align(record_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
     lv_obj_set_style_radius(record_btn, 40, 0);
@@ -395,6 +398,7 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_color(record_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(record_icon, &lv_font_montserrat_24, 0);
 
+    // Settings button
     lv_obj_t *menu_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(menu_btn, 50, 50);
     lv_obj_set_style_radius(menu_btn, 25, 0);
@@ -406,16 +410,17 @@ void ui_Screen1_screen_init(void) {
     lv_obj_center(menu_icon);
     lv_obj_set_style_text_color(menu_icon, lv_color_white(), 0);
 
+    // Record time label
     record_time_label = lv_label_create(ui_Screen1);
     lv_label_set_text(record_time_label, "00:00:00");
     lv_obj_align(record_time_label, LV_ALIGN_BOTTOM_MID, 0, -100);
     lv_obj_set_style_text_color(record_time_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(record_time_label, &lv_font_montserrat_24, 0);
 
-    // Create timers
-    lv_timer_create(update_video_preview, 33, video_area);
-    lv_timer_create(update_record_time, 1000, NULL);
-    lv_timer_create(check_command_file, 500, NULL);  // Check command file every 500ms
+    // 创建定时器
+    lv_timer_create(update_video_preview, 33, video_area);     // 视频预览更新
+    lv_timer_create(update_record_time, 1000, NULL);           // 录制时间更新
+    lv_timer_create(update_gnss_data, 1000, gnss_label);       // GNSS数据更新
 
     lv_screen_load(ui_Screen1);
 }

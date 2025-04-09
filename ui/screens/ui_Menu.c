@@ -1,7 +1,13 @@
 #include "../ui.h"
 #include <sys/msg.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MSG_KEY 9876
+#define GNSS_FIFO_PATH "/tmp/gnss_control_fifo"
 
 static int msgid;
 
@@ -32,6 +38,24 @@ static void res_dropdown_event_cb(lv_event_t *e) {
         perror("msgsnd failed for resolution control");
     }
     printf("Resolution selected: %dp\n", resolution);
+}
+
+// GNSS switch event callback
+static void gnss_switch_event_cb(lv_event_t *e) {
+    lv_obj_t *sw = lv_event_get_target(e);
+    int is_on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    
+    // 打开GNSS控制FIFO
+    int fd = open(GNSS_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+    if (fd >= 0) {
+        const char *cmd = is_on ? "start" : "stop";
+        write(fd, cmd, strlen(cmd));
+        close(fd);
+        printf("Sent GNSS command: %s\n", cmd);
+    } else {
+        perror("Failed to open GNSS control FIFO");
+        printf("Is GNSS process running? FIFO path: %s\n", GNSS_FIFO_PATH);
+    }
 }
 
 static void back_to_screen1(lv_event_t *e) {
@@ -91,8 +115,9 @@ void ui_Screen2_screen_init(void) {
     const char* switches[] = {"IMU Stabilization", "HOT-POINT Tracking", "GNSS Recording"};
     for (int i = 0; i < 3; i++) {
         lv_obj_t *div = lv_line_create(scroll_container);
-        static lv_point_t line[] = {{10,0}, {hor_res-10,0}};
-        lv_line_set_points(div, line, 2);
+        // 修改为 lv_point_precise_t 类型
+        static lv_point_precise_t line_points[] = {{10,0}, {hor_res-10,0}};
+        lv_line_set_points(div, line_points, 2);
         lv_obj_set_style_line_width(div, 1, 0);
         lv_obj_set_style_line_color(div, lv_color_hex(0xDDDDDD), 0);
 
@@ -109,6 +134,11 @@ void ui_Screen2_screen_init(void) {
         
         lv_obj_t *sw = lv_switch_create(sw_row);
         lv_obj_set_size(sw, 60, 30);
+        
+        // 为GNSS开关设置事件回调
+        if (i == 2) { // GNSS Recording开关
+            lv_obj_add_event_cb(sw, gnss_switch_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
+        }
     }
 
     lv_obj_t *info_panel = lv_obj_create(scroll_container);
