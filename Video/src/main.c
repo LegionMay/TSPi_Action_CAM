@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
         free_config(config);
         return -1;
     }
-    start_pipeline(pipeline);
+    start_pipeline(pipeline,config);
 
     // 监听管道消息
     monitor_pipeline(pipeline);

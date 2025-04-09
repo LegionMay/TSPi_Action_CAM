@@ -190,6 +190,7 @@ CMakeFiles/VideoProcess.dir/src/pipeline.c.o
  ../include/pipeline.h
  ../include/shm_utils.h
  ../include/utils.h
+ /app/Video/include/config.h
  /app/Video/src/pipeline.c
  /usr/include/glib-2.0/glib-object.h
  /usr/include/glib-2.0/glib.h

@@ -2,7 +2,8 @@
     "files.associations": {
         "config.h": "c",
         "pipeline.h": "c",
-        "shm_utils.h": "c"
+        "shm_utils.h": "c",
+        "imu_logger.h": "c"
     },
     "fileheader.customMade": {
     "Author": "LegionMay",

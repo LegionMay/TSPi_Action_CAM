@@ -1,0 +1,3 @@
+/app/IMU/build/CMakeFiles/rebuild_cache.dir
+/app/IMU/build/CMakeFiles/edit_cache.dir
+/app/IMU/build/CMakeFiles/imu_logger.dir

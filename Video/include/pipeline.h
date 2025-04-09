@@ -11,7 +11,7 @@
 void* shm_ptr;  // 全局共享内存指针
 
 GstElement* create_pipeline(VideoConfig *config);
-void start_pipeline(GstElement *pipeline);
+void start_pipeline(GstElement *pipeline, VideoConfig *config); 
 void monitor_pipeline(GstElement *pipeline);
 void cleanup_pipeline(GstElement *pipeline);
 

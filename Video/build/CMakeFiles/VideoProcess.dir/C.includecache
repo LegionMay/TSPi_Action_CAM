@@ -26,24 +26,6 @@ gst/gst.h
 
 /app/Video/include/config.h
 
-/app/Video/src/config.c
-../include/config.h
-/app/Video/include/config.h
-stdlib.h
--
-
-/app/Video/src/main.c
-pipeline.h
-/app/Video/src/pipeline.h
-shm_utils.h
-/app/Video/src/shm_utils.h
-config.h
-/app/Video/src/config.h
-stdio.h
--
-stdlib.h
--
-
 /app/Video/src/pipeline.c
 pipeline.h
 /app/Video/src/pipeline.h
@@ -51,6 +33,8 @@ shm_utils.h
 /app/Video/src/shm_utils.h
 utils.h
 /app/Video/src/utils.h
+../include/config.h
+/app/Video/include/config.h
 gst/app/gstappsink.h
 -
 time.h
@@ -65,13 +49,13 @@ fcntl.h
 -
 sys/stat.h
 -
-
-/app/Video/src/shm_utils.c
-shm_utils.h
-/app/Video/src/shm_utils.h
+sys/shm.h
+-
 stdio.h
 -
-stdlib.h
+unistd.h
+-
+errno.h
 -
 
 /usr/include/glib-2.0/glib-object.h
