@@ -1,3 +1,7 @@
+/*
+ * @Author: LegionMay
+ * @FilePath: /TSPi_Action/IMU/src/mpu6500.c
+ */
 /* ---------- src/mpu6500.c ---------- */
 #include "imu_logger.h"
 #include "i2c_utils.h"

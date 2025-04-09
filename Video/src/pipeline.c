@@ -142,8 +142,7 @@ static void start_recording(VideoConfig *config) {
     char filename[256];
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
-    snprintf(filename, sizeof(filename), "/mnt/sdcard/record_%dx%d_%04d%02d%02d_%02d%02d%02d.mkv",
-             config->record_width, config->record_height,
+    snprintf(filename, sizeof(filename), "/mnt/sdcard/record_%04d%02d%02d_%02d%02d%02d.mkv",
              t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, 
              t->tm_hour, t->tm_min, t->tm_sec);
     
