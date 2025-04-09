@@ -4,7 +4,7 @@
  */
 #include <lvgl/lvgl.h>
 #include "../ui.h"
-#include "ui/sdcard/sd_status.h"  // 添加SD卡状态模块头文件
+#include "ui/sdcard/sd_status.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/shm.h>
@@ -15,14 +15,22 @@
 #include <time.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/msg.h>
 
 // Shared memory and semaphore definitions
 #define SHM_KEY 1234
 #define SHM_SIZE 800 * 450 * 4
-#define RECORD_SHM_KEY 5678     // 用于录制控制的共享内存键值
+#define RECORD_SHM_KEY 5678
+#define MSG_KEY 9876
+
+// Command file path for triggering recording via command line
+#define RECORD_CMD_FILE "/tmp/record_cmd"
 
 // Semaphore pointer
 static sem_t *sem;
+
+// System V message queue ID
+static int msgid;
 
 // Shared memory structure for recording control
 typedef struct {
@@ -31,24 +39,23 @@ typedef struct {
 
 static RecordControl *record_control = NULL;
 
+// Message structure for System V
+typedef struct {
+    long mtype;         // Message type (required by System V)
+    char mtext[32];     // Message content
+} MsgBuf;
+
 // Image descriptor for LVGL
 static lv_image_dsc_t video_img_dsc = {
     .header = {
-        .magic = LV_IMAGE_HEADER_MAGIC,          // LVGL 图像头部魔数
-        .cf = LV_COLOR_FORMAT_ARGB8888,          // ARGB8888 格式（32 位）
-        .w = 450,                                // 图像宽度（旋转后）
-        .h = 800,                                // 图像高度（旋转后）
+        .magic = LV_IMAGE_HEADER_MAGIC,
+        .cf = LV_COLOR_FORMAT_ARGB8888,
+        .w = 450,
+        .h = 800,
     },
-    .data_size = SHM_SIZE,                  // 数据大小（宽 × 高 × 4 字节）
-    .data = NULL,                           // 数据指针，稍后设置
+    .data_size = SHM_SIZE,
+    .data = NULL,
 };
-
-// 返回按钮回调函数
-static void back_btn_event_cb(lv_event_t *e) {
-    lv_obj_t *back_btn = lv_event_get_target(e);
-    lv_obj_t *container = lv_obj_get_parent(back_btn);  // 获取父容器
-    lv_obj_delete(container);  // 删除容器
-}
 
 // Initialize named semaphore
 static void init_semaphore(void) {
@@ -71,33 +78,102 @@ static void init_record_control(void) {
         perror("shmat failed for record control in UI process");
         exit(1);
     }
-    record_control->is_recording = 0;  // 初始化为未录制状态
+    record_control->is_recording = 0;
 }
 
-// Record button event callback
+// Initialize System V message queue
+static void init_message_queue(void) {
+    msgid = msgget(MSG_KEY, IPC_CREAT | 0666);
+    if (msgid == -1) {
+        perror("msgget failed in UI process");
+        exit(1);
+    }
+}
+
+// Back button event callback
+static void back_btn_event_cb(lv_event_t *e) {
+    lv_obj_t *back_btn = lv_event_get_target(e);
+    lv_obj_t *container = lv_obj_get_parent(back_btn);
+    lv_obj_delete(container);
+}
+
+// Record button state
 static uint8_t is_recording = 0;
 static time_t start_time;
-static lv_obj_t *record_btn = NULL;  // 全局记录按钮对象，用于GPIO触发
-static void record_btn_event_cb(lv_event_t *e) {
-    lv_obj_t *btn = lv_event_get_target(e);
-    lv_obj_t *record_label = lv_obj_get_child(btn, 0);
+static lv_obj_t *record_btn = NULL;
+
+// Function to trigger recording action (can be called programmatically)
+static void trigger_record_button(int start_recording) {
+    if (!record_btn) {
+        printf("Record button not initialized\n");
+        return;
+    }
     
-    if (is_recording) {
-        printf("Recording stopped\n");
-        lv_label_set_text(record_label, LV_SYMBOL_PLAY);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
-        record_control->is_recording = 0;  // 通知视频进程停止录制
-    } else {
+    lv_obj_t *record_label = lv_obj_get_child(record_btn, 0);
+    
+    // Don't trigger if already in the requested state
+    if ((start_recording && is_recording) || (!start_recording && !is_recording)) {
+        return;
+    }
+    
+    MsgBuf msg;
+    msg.mtype = 1;  // Use type 1 for all messages
+    
+    if (start_recording) {
         printf("Recording started\n");
         lv_label_set_text(record_label, LV_SYMBOL_STOP);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
-        record_control->is_recording = 1;  // 通知视频进程开始录制
-        start_time = time(NULL);          // 记录开始时间
+        lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xCC0000), LV_PART_MAIN);
+        record_control->is_recording = 1;
+        snprintf(msg.mtext, sizeof(msg.mtext), "record %d", 1);
+        start_time = time(NULL);
+        is_recording = 1;
+    } else {
+        printf("Recording stopped\n");
+        lv_label_set_text(record_label, LV_SYMBOL_PLAY);
+        lv_obj_set_style_bg_color(record_btn, lv_color_hex(0xFF0000), LV_PART_MAIN);
+        record_control->is_recording = 0;
+        snprintf(msg.mtext, sizeof(msg.mtext), "record %d", 0);
+        is_recording = 0;
     }
-    is_recording = !is_recording;
+    
+    if (msgsnd(msgid, &msg, sizeof(msg.mtext), 0) == -1) {
+        perror("msgsnd failed for record control");
+    }
 }
 
-// Preview button event callback (列出MKV文件并添加返回按钮)
+// Record button event callback (uses trigger function)
+static void record_btn_event_cb(lv_event_t *e) {
+    // Toggle recording state
+    trigger_record_button(!is_recording);
+}
+
+// Check for command file to start/stop recording
+static void check_command_file(lv_timer_t *timer) {
+    FILE *cmd_file = fopen(RECORD_CMD_FILE, "r");
+    if (cmd_file) {
+        char cmd[32] = {0};
+        if (fgets(cmd, sizeof(cmd), cmd_file)) {
+            // Remove newline if present
+            cmd[strcspn(cmd, "\n")] = 0;
+            
+            if (strcmp(cmd, "start") == 0) {
+                printf("Command received to start recording\n");
+                trigger_record_button(1);
+            } else if (strcmp(cmd, "stop") == 0) {
+                printf("Command received to stop recording\n");
+                trigger_record_button(0);
+            } else {
+                printf("Unknown command: %s\n", cmd);
+            }
+        }
+        fclose(cmd_file);
+        
+        // Delete the command file after processing
+        remove(RECORD_CMD_FILE);
+    }
+}
+
+// Preview button event callback
 static void preview_btn_event_cb(lv_event_t *e) {
     DIR *dir;
     struct dirent *entry;
@@ -109,19 +185,17 @@ static void preview_btn_event_cb(lv_event_t *e) {
         return;
     }
     
-    // 创建一个容器用于文件列表和返回按钮
     lv_obj_t *container = lv_obj_create(lv_screen_active());
     lv_obj_set_size(container, 400, 600);
     lv_obj_center(container);
     lv_obj_set_style_bg_color(container, lv_color_hex(0x333333), 0);
 
-    // 创建文件列表
     lv_obj_t *list = lv_list_create(container);
     lv_obj_set_size(list, 400, 550);
     lv_obj_align(list, LV_ALIGN_TOP_MID, 0, 0);
     
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {  // 只处理普通文件
+        if (entry->d_type == DT_REG) {
             char *ext = strrchr(entry->d_name, '.');
             if (ext && strcmp(ext, ".mkv") == 0) {
                 lv_list_add_text(list, entry->d_name);
@@ -130,7 +204,6 @@ static void preview_btn_event_cb(lv_event_t *e) {
     }
     closedir(dir);
 
-    // 创建返回按钮
     lv_obj_t *back_btn = lv_button_create(container);
     lv_obj_set_size(back_btn, 100, 40);
     lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
@@ -141,16 +214,15 @@ static void preview_btn_event_cb(lv_event_t *e) {
     lv_obj_center(back_label);
     lv_obj_set_style_text_color(back_label, lv_color_white(), 0);
 
-    // 返回按钮事件：删除容器（替换lambda为普通函数）
     lv_obj_add_event_cb(back_btn, back_btn_event_cb, LV_EVENT_CLICKED, NULL);
 }
 
-// Menu button event callback (恢复原有功能)
+// Menu button event callback
 static void menu_btn_event_cb(lv_event_t *e) {
     lv_screen_load(ui_Screen2);
 }
 
-// Update video preview with semaphore synchronization
+// Update video preview
 static void update_video_preview(lv_timer_t *timer) {
     lv_obj_t *video_area = (lv_obj_t *)lv_timer_get_user_data(timer);
     static void *shm_ptr = NULL;
@@ -166,13 +238,12 @@ static void update_video_preview(lv_timer_t *timer) {
             perror("shmat failed");
             return;
         }
-        video_img_dsc.data = shm_ptr;  // 将共享内存指针设置为图像数据源
+        video_img_dsc.data = shm_ptr;
     }
 
-    // 同步访问共享内存
     sem_wait(sem);
-    lv_image_set_src(video_area, &video_img_dsc);  // 使用图像描述符
-    lv_obj_invalidate(video_area);                 // 刷新显示
+    lv_image_set_src(video_area, &video_img_dsc);
+    lv_obj_invalidate(video_area);
     sem_post(sem);
 }
 
@@ -196,8 +267,6 @@ static void custom_sd_display(lv_obj_t *label, uint8_t percent) {
     lv_label_set_text_fmt(label, "%d%%", percent);
     lv_obj_set_style_text_color(label, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
-    
-    // Display red if over 90%
     if (percent > 90) {
         lv_obj_set_style_text_color(label, lv_color_hex(0xFF0000), 0);
     }
@@ -208,17 +277,15 @@ void ui_Screen1_screen_init(void) {
     const int32_t hor_res = 480;
     const int32_t ver_res = 800;
 
-    // Initialize semaphore and record control before LVGL setup
     init_semaphore();
     init_record_control();
+    init_message_queue();
 
-    // Create main container
     ui_Screen1 = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_size(ui_Screen1, hor_res, ver_res);
     lv_obj_set_style_bg_color(ui_Screen1, lv_color_hex(0x000000), 0);
 
-    // Top status bar
     lv_obj_t *status_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(status_bar);
     lv_obj_set_size(status_bar, hor_res, 35);
@@ -227,30 +294,25 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_flex_align(status_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, 
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // SD card status container
     lv_obj_t *sd_container = lv_obj_create(status_bar);
     lv_obj_remove_style_all(sd_container);
     lv_obj_set_flex_flow(sd_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(sd_container, LV_FLEX_ALIGN_CENTER, 
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     
-    // SD card icon
     lv_obj_t *sd_icon = lv_label_create(sd_container);
     lv_label_set_text(sd_icon, LV_SYMBOL_SD_CARD);
     lv_obj_set_style_text_color(sd_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(sd_icon, &lv_font_montserrat_16, 0);
     
-    // Initialize SD card status module
     sd_status_init(sd_container);
     sd_set_display_callback(custom_sd_display);
 
-    // Recording mode label
     lv_obj_t *rec_mode = lv_label_create(status_bar);
     lv_label_set_text(rec_mode, "1080P30");
     lv_obj_set_style_text_color(rec_mode, lv_color_white(), 0);
     lv_obj_set_style_text_font(rec_mode, &lv_font_montserrat_16, 0);
 
-    // GNSS satellite info
     lv_obj_t *gnss_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(gnss_info);
     lv_obj_set_flex_flow(gnss_info, LV_FLEX_FLOW_ROW);
@@ -268,7 +330,6 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_font(gnss_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_pad_left(gnss_label, 5, 0);
 
-    // Battery info
     lv_obj_t *battery_info = lv_obj_create(status_bar);
     lv_obj_remove_style_all(battery_info);
     lv_obj_set_flex_flow(battery_info, LV_FLEX_FLOW_ROW);
@@ -286,20 +347,17 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_font(bat_icon, &lv_font_montserrat_16, 0);
     lv_obj_set_style_pad_left(bat_icon, 8, 0);
 
-    // Video preview container
     lv_obj_t *video_container = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(video_container);
     lv_obj_set_size(video_container, hor_res, ver_res - 100);
     lv_obj_align(video_container, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_set_style_bg_color(video_container, lv_color_hex(0x222222), 0);
 
-    // Video preview area (adjusted size to match rotated 800x450 -> 450x800)
     lv_obj_t *video_area = lv_image_create(video_container);
     lv_obj_set_size(video_area, 450, 800);
     lv_obj_center(video_area);
     lv_obj_set_style_bg_color(video_area, lv_color_hex(0x333333), 0);
 
-    // Bottom control bar
     lv_obj_t *bottom_bar = lv_obj_create(ui_Screen1);
     lv_obj_remove_style_all(bottom_bar);
     lv_obj_set_size(bottom_bar, hor_res, 70);
@@ -309,20 +367,18 @@ void ui_Screen1_screen_init(void) {
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_hor(bottom_bar, 20, 0);
 
-    // Preview button (绑定文件列表功能)
     lv_obj_t *preview_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(preview_btn, 50, 50);
     lv_obj_set_style_radius(preview_btn, 25, 0);
     lv_obj_set_style_bg_color(preview_btn, lv_color_hex(0x444444), 0);
-    lv_obj_add_event_cb(preview_btn, preview_btn_event_cb, LV_EVENT_CLICKED, NULL);  // 绑定文件列表
+    lv_obj_add_event_cb(preview_btn, preview_btn_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *preview_icon = lv_label_create(preview_btn);
     lv_label_set_text(preview_icon, LV_SYMBOL_VIDEO);
     lv_obj_center(preview_icon);
     lv_obj_set_style_text_color(preview_icon, lv_color_white(), 0);
 
-    // Record button
-    record_btn = lv_button_create(ui_Screen1);  // 使用全局变量
+    record_btn = lv_button_create(ui_Screen1);
     if (!record_btn) {
         printf("Failed to create record_btn\n");
         return;
@@ -339,29 +395,27 @@ void ui_Screen1_screen_init(void) {
     lv_obj_set_style_text_color(record_icon, lv_color_white(), 0);
     lv_obj_set_style_text_font(record_icon, &lv_font_montserrat_24, 0);
 
-    // Settings button (恢复原有功能)
     lv_obj_t *menu_btn = lv_button_create(bottom_bar);
     lv_obj_set_size(menu_btn, 50, 50);
     lv_obj_set_style_radius(menu_btn, 25, 0);
     lv_obj_set_style_bg_color(menu_btn, lv_color_hex(0x444444), 0);
-    lv_obj_add_event_cb(menu_btn, menu_btn_event_cb, LV_EVENT_CLICKED, NULL);  // 恢复加载ui_Screen2
+    lv_obj_add_event_cb(menu_btn, menu_btn_event_cb, LV_EVENT_CLICKED, NULL);
     
     lv_obj_t *menu_icon = lv_label_create(menu_btn);
     lv_label_set_text(menu_icon, LV_SYMBOL_SETTINGS);
     lv_obj_center(menu_icon);
     lv_obj_set_style_text_color(menu_icon, lv_color_white(), 0);
 
-    // Record time label
     record_time_label = lv_label_create(ui_Screen1);
     lv_label_set_text(record_time_label, "00:00:00");
     lv_obj_align(record_time_label, LV_ALIGN_BOTTOM_MID, 0, -100);
     lv_obj_set_style_text_color(record_time_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(record_time_label, &lv_font_montserrat_24, 0);
 
-    // Video update timer
+    // Create timers
     lv_timer_create(update_video_preview, 33, video_area);
-    // Record time update timer
     lv_timer_create(update_record_time, 1000, NULL);
+    lv_timer_create(check_command_file, 500, NULL);  // Check command file every 500ms
 
     lv_screen_load(ui_Screen1);
 }
