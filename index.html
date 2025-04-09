@@ -259,8 +259,8 @@
         async function loadVideoFiles() {
             try {
                 const startTime = performance.now();
-                // 修改请求路径为 /mnt/sdcard
-                const response = await fetch('/mnt/sdcard/');
+                // 从/api/路径获取目录列表，而不是根目录
+                const response = await fetch('/');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -286,8 +286,8 @@
                         return {
                             name: link.textContent.trim(),
                             path: path,
-                            size: parseInt(tds[2].textContent.replace(/[^0-9]/g, '')) || 0,
-                            date: tds[1].textContent.trim(),
+                            size: parseInt(tds[1].textContent.replace(/[^0-9]/g, '')) || 0,
+                            date: tds[2].textContent.trim(),
                             isExample: false
                         };
                     })
@@ -318,8 +318,8 @@
                         ${escapeHTML(file.name)}
                         ${file.isExample ? '<span class="example-badge">示例</span>' : ''}
                     </span>
-                    <span>${escapeHTML(file.date)}</span>
                     <span>${formatSize(file.size)}</span>
+                    <span>${escapeHTML(file.date)}</span>
                 `;
                 item.dataset.filePath = encodeURI(file.path);
                 fragment.appendChild(item);
@@ -337,8 +337,8 @@
                 const file = {
                     name: decodeURI(item.dataset.filePath.split('/').pop()),
                     path: decodeURI(item.dataset.filePath),
-                    size: parseInt(item.children[2].textContent.match(/(\d+\.?\d*)/)[0]),
-                    date: item.children[1].textContent,
+                    size: parseInt(item.children[1].textContent.match(/(\d+\.?\d*)/)[0]),
+                    date: item.children[2].textContent,
                     isExample: item.querySelector('.example-badge') !== null
                 };
                 showVideoDetail(file);
@@ -469,4 +469,4 @@
         showTab('device');
     </script>
 </body>
-</html>    
+</html>
